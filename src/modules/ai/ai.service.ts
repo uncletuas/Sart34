@@ -1,0 +1,130 @@
+import { Injectable } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { MessageChannel, PolicyRiskLevel, Prisma } from "@prisma/client";
+import OpenAI from "openai";
+import type { AuthUser } from "../../shared/types/auth-user";
+import { PrismaService } from "../prisma/prisma.service";
+import { WorkspacesService } from "../workspaces/workspaces.service";
+
+const BLOCKED_PATTERNS = [
+  /guaranteed profit/i,
+  /guaranteed sales/i,
+  /instant success/i,
+  /before and after/i,
+  /crypto/i,
+  /loan/i,
+  /political/i,
+  /adult/i,
+  /gambling/i
+];
+
+@Injectable()
+export class AiService {
+  private readonly client?: OpenAI;
+  private readonly model: string;
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly workspaces: WorkspacesService,
+    private readonly config: ConfigService
+  ) {
+    const apiKey = config.get<string>("OPENAI_API_KEY");
+    this.model = config.get<string>("OPENAI_MODEL", "gpt-4.1-mini");
+    this.client = apiKey ? new OpenAI({ apiKey }) : undefined;
+  }
+
+  async generateCampaign(user: AuthUser, workspaceId: string, input: Record<string, unknown>, mode = "quick") {
+    await this.workspaces.assertMembership(user.sub, user.role, workspaceId);
+    const output = await this.structuredJson("campaign-generation", {
+      mode,
+      instruction:
+        "Generate a Meta-first campaign. Return only JSON with campaign_name, objective, audiences, ad_copies, lead_form_questions, follow_up_messages, budget_recommendation, policy_risk.",
+      input
+    });
+    await this.prisma.aiGeneration.create({
+      data: {
+        workspaceId,
+        type: "campaign-generation",
+        prompt: JSON.stringify(input),
+        outputJson: output as Prisma.InputJsonValue,
+        provider: this.client ? "openai" : "mock",
+        model: this.model,
+        creditCost: 20
+      }
+    });
+    return output;
+  }
+
+  async reviewPolicy(user: AuthUser, workspaceId: string, content: Record<string, unknown>) {
+    await this.workspaces.assertMembership(user.sub, user.role, workspaceId);
+    return this.scanPolicy(content);
+  }
+
+  async generateFollowUp(
+    user: AuthUser,
+    workspaceId: string,
+    leadContext: Record<string, unknown>,
+    channel: MessageChannel
+  ) {
+    await this.workspaces.assertMembership(user.sub, user.role, workspaceId);
+    const output = await this.structuredJson("follow-up-message", {
+      channel,
+      instruction: "Generate one concise follow-up message. Return JSON with message, suggested_next_action, temperature.",
+      leadContext
+    });
+    return output;
+  }
+
+  scanPolicy(content: unknown): { level: PolicyRiskLevel; warnings: string[]; requiresHumanReview: boolean } {
+    const text = JSON.stringify(content);
+    const warnings = BLOCKED_PATTERNS.filter((pattern) => pattern.test(text)).map((pattern) =>
+      pattern.source.replace(/\\/g, "")
+    );
+    const level: PolicyRiskLevel = warnings.length >= 3 ? "BLOCKED" : warnings.length > 0 ? "HIGH" : "LOW";
+    return { level, warnings, requiresHumanReview: level === "HIGH" || level === "BLOCKED" };
+  }
+
+  private async structuredJson(type: string, payload: Record<string, unknown>) {
+    if (!this.client) return this.mockOutput(type, payload);
+    const response = await this.client.chat.completions.create({
+      model: this.model,
+      messages: [
+        {
+          role: "system",
+          content: "You are Sart34's ad operations AI. Return strict JSON only. Avoid guarantees and policy-risky claims."
+        },
+        { role: "user", content: JSON.stringify(payload) }
+      ],
+      response_format: { type: "json_object" }
+    });
+    const text = response.choices[0]?.message.content ?? "{}";
+    return JSON.parse(text) as Record<string, unknown>;
+  }
+
+  private mockOutput(type: string, payload: Record<string, unknown>) {
+    if (type === "follow-up-message") {
+      return {
+        message: "Thanks for your interest. Would you like more details or should we schedule a quick follow-up?",
+        suggested_next_action: "Ask for preferred contact time",
+        temperature: "WARM"
+      };
+    }
+    return {
+      campaign_name: "Sart34 Generated Campaign",
+      objective: "lead_generation",
+      audiences: [{ name: "Local High-Intent Buyers", description: "People likely to enquire about the offer." }],
+      ad_copies: [
+        {
+          primary_text: "Discover this offer and request details today.",
+          headline: "Request Details Today",
+          description: "Chat with the business for availability and next steps.",
+          cta: "Send Message"
+        }
+      ],
+      lead_form_questions: ["What is your budget?", "When would you like to be contacted?"],
+      follow_up_messages: [{ stage: "new_lead", message: "Thank you for your interest. Would you like details?" }],
+      budget_recommendation: { daily_budget: 5000, currency: "NGN" },
+      policy_risk: this.scanPolicy(payload)
+    };
+  }
+}
