@@ -156,6 +156,30 @@ export class CampaignsService {
     return this.prisma.campaign.update({ where: { id: campaign.id }, data: { status } });
   }
 
+  async optimize(user: AuthUser, campaignId: string) {
+    const campaign = await this.findCampaignForUser(user, campaignId);
+    const metrics = await this.prisma.campaignMetric.findMany({
+      where: { campaignId },
+      orderBy: { date: "desc" },
+      take: 14
+    });
+    const context = {
+      goal: campaign.goal,
+      objective: campaign.objective,
+      productDetails: campaign.productDetails,
+      aiStrategy: campaign.aiStrategyJson,
+      status: campaign.status,
+      metrics: metrics.map((metric) => ({
+        date: metric.date,
+        impressions: metric.impressions,
+        clicks: metric.clicks,
+        leads: metric.leads,
+        spend: metric.spend
+      }))
+    };
+    return this.ai.generateOptimization(user, campaign.workspaceId, context);
+  }
+
   async attachCreatives(user: AuthUser, campaignId: string, creativeIds: string[]) {
     const campaign = await this.findCampaignForUser(user, campaignId, true);
     await this.prisma.adCreative.updateMany({

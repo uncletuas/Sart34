@@ -48,6 +48,47 @@ export class IntegrationsService {
     };
   }
 
+  async googleConnect(user: AuthUser, workspaceId: string) {
+    await this.workspaces.assertMembership(user.sub, user.role, workspaceId, ["OWNER", "ADMIN"]);
+    const clientId = this.config.get<string>("GOOGLE_CLIENT_ID", "");
+    const redirect = encodeURIComponent(this.config.get<string>("GOOGLE_REDIRECT_URI", ""));
+    const state = encodeURIComponent(JSON.stringify({ workspaceId, userId: user.sub }));
+    const scope = encodeURIComponent("https://www.googleapis.com/auth/adwords openid email");
+    return {
+      authorizationUrl: clientId
+        ? `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirect}&response_type=code&access_type=offline&prompt=consent&include_granted_scopes=true&scope=${scope}&state=${state}`
+        : null,
+      message: clientId ? "Redirect the user to authorizationUrl." : "GOOGLE_CLIENT_ID is not configured."
+    };
+  }
+
+  async tiktokConnect(user: AuthUser, workspaceId: string) {
+    await this.workspaces.assertMembership(user.sub, user.role, workspaceId, ["OWNER", "ADMIN"]);
+    const appId = this.config.get<string>("TIKTOK_APP_ID", "");
+    const redirect = encodeURIComponent(this.config.get<string>("TIKTOK_REDIRECT_URI", ""));
+    const state = encodeURIComponent(JSON.stringify({ workspaceId, userId: user.sub }));
+    return {
+      authorizationUrl: appId
+        ? `https://business-api.tiktok.com/portal/auth?app_id=${appId}&redirect_uri=${redirect}&state=${state}`
+        : null,
+      message: appId ? "Redirect the user to authorizationUrl." : "TIKTOK_APP_ID is not configured."
+    };
+  }
+
+  async whatsappConnect(user: AuthUser, workspaceId: string) {
+    await this.workspaces.assertMembership(user.sub, user.role, workspaceId, ["OWNER", "ADMIN"]);
+    const appId = this.config.get<string>("WHATSAPP_APP_ID", this.config.get<string>("META_APP_ID", ""));
+    const redirect = encodeURIComponent(this.config.get<string>("WHATSAPP_REDIRECT_URI", this.config.get<string>("META_REDIRECT_URI", "")));
+    const state = encodeURIComponent(JSON.stringify({ workspaceId, userId: user.sub, channel: "WHATSAPP" }));
+    const scope = encodeURIComponent("whatsapp_business_management,whatsapp_business_messaging,business_management");
+    return {
+      authorizationUrl: appId
+        ? `https://www.facebook.com/v20.0/dialog/oauth?client_id=${appId}&redirect_uri=${redirect}&state=${state}&scope=${scope}`
+        : null,
+      message: appId ? "Redirect the user to authorizationUrl." : "WHATSAPP_APP_ID (or META_APP_ID) is not configured."
+    };
+  }
+
   async metaCallback(dto: MetaCallbackDto) {
     return this.prisma.integrationAccount.upsert({
       where: { id: dto.externalAccountId ?? `${dto.workspaceId}-meta` },

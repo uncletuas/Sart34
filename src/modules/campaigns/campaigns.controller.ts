@@ -81,4 +81,9 @@ export class CampaignsController {
   metrics(@CurrentUser() user: AuthUser, @Param("id") id: string) {
     return this.campaigns.metrics(user, id);
   }
+
+  @Post(":id/optimize")
+  optimize(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.campaigns.optimize(user, id);
+  }
 }

@@ -4,32 +4,34 @@ import {
   ArrowRight,
   BadgeCheck,
   Bell,
-  Bookmark,
   ChevronRight,
   CircleDollarSign,
   Compass,
   Eye,
-  Heart,
+  FolderOpen,
   Home,
   ImagePlus,
   Inbox,
+  Layout,
   Loader2,
   LogOut,
+  Mail,
   MessageCircle,
   MoreHorizontal,
   Pause,
+  Phone,
   Play,
   Plus,
   RefreshCw,
   Send,
   Settings,
-  Share2,
   Shield,
   ShieldCheck,
   Sparkles,
-  TrendingUp,
+  Trash2,
   Unplug,
   Upload,
+  UserPlus,
   UserRound,
   Users,
   Wallet,
@@ -38,34 +40,40 @@ import {
 } from "lucide-react";
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, Campaign, Lead, Workspace } from "./api";
+import { api, Campaign, Creative, Lead, Workspace } from "./api";
 
 type Toast = { type: "success" | "error" | "info"; message: string };
-type BusinessTab = "home" | "discover" | "inbox" | "profile";
+type BusinessTab = "home" | "library" | "inbox" | "profile";
 type AdminTab = "admin-home" | "admin-review" | "admin-users" | "admin-profile";
 
 type IntegrationAccount = { id: string; provider: string; accountName?: string; status: string };
 
-type PlatformRequirement = {
-  key: string;
-  label: string;
-  hint?: string;
-  type?: "text" | "url" | "tel" | "select";
-  options?: string[];
+type Template = {
+  id: string;
+  industry: string;
+  name: string;
+  goal: string;
+  description: string;
+  defaultDurationDays: number;
+  defaultDailyBudget: number;
+  callToAction: string;
+  audienceHints: string;
+  copyExamples: string[];
+  recommendedPlatforms: string[];
 };
+
+type Requirement = { key: string; label: string; hint?: string; type?: "text" | "url" | "tel" | "select"; options?: string[] };
 
 type PlatformDef = {
   id: string;
   name: string;
   short: string;
-  tagline: string;
   surfaces: string[];
   accent: string;
   glyph: string;
   formats: string[];
-  requirements: PlatformRequirement[];
-  budgetHint: string;
-  oauth: boolean;
+  requirements: Requirement[];
+  connect: (workspaceId: string) => Promise<{ authorizationUrl: string | null; message: string }>;
 };
 
 const PLATFORMS: PlatformDef[] = [
@@ -73,174 +81,74 @@ const PLATFORMS: PlatformDef[] = [
     id: "META",
     name: "Meta",
     short: "Facebook + Instagram",
-    tagline: "Reels, Feed, Stories, Marketplace",
-    surfaces: ["Instagram Feed", "Instagram Reels", "Facebook Feed", "Stories", "Marketplace"],
+    surfaces: ["Instagram Feed", "Reels", "Stories", "Facebook Feed"],
     accent: "#1877F2",
     glyph: "ƒ",
-    formats: ["Image", "Video 9:16", "Carousel", "Collection"],
+    formats: ["Image", "Video 9:16", "Carousel"],
     requirements: [
-      { key: "page", label: "Facebook Page", hint: "Required for Instagram + Facebook delivery" },
-      { key: "adAccount", label: "Ad account", hint: "Used to bill spend and track delivery" },
-      { key: "pixel", label: "Pixel / Conversions API", hint: "Optional but raises ROAS by 30 to 60 percent" },
-      { key: "primaryText", label: "Primary text", hint: "125 characters keeps the most for Reels" },
-      { key: "callToAction", label: "Call to action", type: "select", options: ["Send WhatsApp message", "Learn more", "Sign up", "Get quote", "Shop now"] }
+      { key: "page", label: "Facebook Page" },
+      { key: "adAccount", label: "Ad account" },
+      { key: "pixel", label: "Pixel / Conversions API" }
     ],
-    budgetHint: "Daily budget recommended above 2,000 NGN for stable learning phase",
-    oauth: true
+    connect: (workspaceId) => api.metaConnect(workspaceId)
   },
   {
     id: "GOOGLE",
     name: "Google Ads",
-    short: "Search + Display + YouTube + Performance Max",
-    tagline: "Capture intent across Search, Maps, Gmail, YouTube",
-    surfaces: ["Google Search", "YouTube", "Display Network", "Discover", "Maps"],
+    short: "Search, YouTube, Display, PMax",
+    surfaces: ["Google Search", "YouTube", "Display", "Maps"],
     accent: "#1A73E8",
     glyph: "G",
-    formats: ["Responsive Search", "Performance Max", "Video", "Display"],
+    formats: ["Responsive Search", "Performance Max", "Video"],
     requirements: [
-      { key: "headlines", label: "5 to 15 headlines (30 chars each)" },
-      { key: "descriptions", label: "2 to 4 descriptions (90 chars each)" },
       { key: "businessName", label: "Business name" },
       { key: "finalUrl", label: "Final URL", type: "url" },
-      { key: "keywords", label: "Keyword themes", hint: "Group by intent: brand, category, competitor" }
+      { key: "headlines", label: "5 to 15 headlines (30 chars)" },
+      { key: "descriptions", label: "2 to 4 descriptions (90 chars)" }
     ],
-    budgetHint: "Search needs at least 10x the average CPC per day to learn",
-    oauth: false
+    connect: (workspaceId) => api.googleConnect(workspaceId)
   },
   {
     id: "TIKTOK",
     name: "TikTok",
     short: "For You + Spark Ads",
-    tagline: "Native vertical video, sound on, fast hooks",
-    surfaces: ["For You", "Top View", "Spark Ads", "Branded Hashtag"],
+    surfaces: ["For You", "Top View", "Spark Ads"],
     accent: "#000000",
     glyph: "♪",
-    formats: ["Video 9:16", "Spark Ad (boost organic post)", "Image carousel"],
+    formats: ["Video 9:16", "Spark Ad"],
     requirements: [
       { key: "identity", label: "TikTok identity / handle" },
-      { key: "pixel", label: "TikTok Pixel", hint: "Required for conversion campaigns" },
-      { key: "music", label: "Sound or original audio", hint: "Sound-on lifts watch time 50%+" },
-      { key: "hashtags", label: "Hashtags", hint: "3 to 5 niche tags beat broad ones" },
-      { key: "hook", label: "First 1.5 second hook", hint: "Native, ugly, real wins polished" }
+      { key: "pixel", label: "TikTok Pixel" }
     ],
-    budgetHint: "Spend at least 20 USD / day per ad group to escape learning",
-    oauth: false
-  },
-  {
-    id: "LINKEDIN",
-    name: "LinkedIn",
-    short: "B2B + Recruiting",
-    tagline: "Reach decision makers by job title, seniority, company",
-    surfaces: ["Sponsored Content", "Message Ads", "Conversation Ads"],
-    accent: "#0A66C2",
-    glyph: "in",
-    formats: ["Single image", "Video", "Document ad", "Lead gen form"],
-    requirements: [
-      { key: "companyPage", label: "LinkedIn Company Page" },
-      { key: "audience", label: "Target by job title, seniority, function, industry" },
-      { key: "headline", label: "Intro text + headline (under 150 chars)" },
-      { key: "leadFormFields", label: "Lead form fields", hint: "Pre-filled from LinkedIn profile" }
-    ],
-    budgetHint: "Minimum 10 USD / day, expect higher CPM than Meta",
-    oauth: false
-  },
-  {
-    id: "X",
-    name: "X",
-    short: "Promoted posts",
-    tagline: "Real-time reach for launches and announcements",
-    surfaces: ["Home Timeline", "Search", "Profiles"],
-    accent: "#000000",
-    glyph: "𝕏",
-    formats: ["Promoted Post", "Image", "Video", "Carousel"],
-    requirements: [
-      { key: "handle", label: "X handle to promote from" },
-      { key: "interests", label: "Interest + keyword targeting" },
-      { key: "tweet", label: "Post copy (280 chars)" }
-    ],
-    budgetHint: "Best for time-sensitive launches and trending moments",
-    oauth: false
-  },
-  {
-    id: "YOUTUBE",
-    name: "YouTube",
-    short: "Video reach + retargeting",
-    tagline: "Skippable in-stream, Bumper, Shorts",
-    surfaces: ["YouTube Watch", "YouTube Shorts", "YouTube Search"],
-    accent: "#FF0000",
-    glyph: "▶",
-    formats: ["Skippable in-stream", "Bumper 6s", "In-feed", "Shorts"],
-    requirements: [
-      { key: "videoUrl", label: "Hosted YouTube video URL", type: "url" },
-      { key: "channel", label: "Linked YouTube channel" },
-      { key: "audience", label: "Topic, in-market, or custom audience" }
-    ],
-    budgetHint: "Bumpers reach cheap, skippables drive consideration",
-    oauth: false
-  },
-  {
-    id: "PINTEREST",
-    name: "Pinterest",
-    short: "Visual planners + shoppers",
-    tagline: "High-intent home, beauty, weddings, decor",
-    surfaces: ["Home feed", "Search", "Related pins"],
-    accent: "#E60023",
-    glyph: "P",
-    formats: ["Standard Pin", "Idea Pin", "Video Pin", "Shopping Pin"],
-    requirements: [
-      { key: "businessAccount", label: "Pinterest Business account" },
-      { key: "boardDestination", label: "Board destination" },
-      { key: "feed", label: "Product feed", hint: "Required for Shopping campaigns" }
-    ],
-    budgetHint: "Skews female, plans purchases 1 to 3 months ahead",
-    oauth: false
-  },
-  {
-    id: "SNAPCHAT",
-    name: "Snapchat",
-    short: "Gen Z reach",
-    tagline: "Snap Ads, Story Ads, AR Lenses",
-    surfaces: ["Discover", "Stories", "Spotlight"],
-    accent: "#FFFC00",
-    glyph: "S",
-    formats: ["Snap Ad 9:16", "Story Ad", "Collection", "AR Lens"],
-    requirements: [
-      { key: "publicProfile", label: "Public profile" },
-      { key: "snapPixel", label: "Snap Pixel" },
-      { key: "audience", label: "Lifestyle, behaviours, lookalikes" }
-    ],
-    budgetHint: "Vertical native creative, 3 to 5 second hook",
-    oauth: false
+    connect: (workspaceId) => api.tiktokConnect(workspaceId)
   },
   {
     id: "WHATSAPP",
     name: "WhatsApp Business",
-    short: "Click to chat + broadcast",
-    tagline: "Highest reply rate, lowest cost per qualified lead in many regions",
-    surfaces: ["Click to WhatsApp ads", "Catalog", "Broadcast"],
+    short: "Click to chat + Catalog",
+    surfaces: ["Click to WhatsApp", "Catalog", "Broadcast"],
     accent: "#25D366",
     glyph: "✓",
     formats: ["Click to chat", "Catalog message", "Broadcast template"],
     requirements: [
-      { key: "whatsappNumber", label: "Verified WhatsApp Business number", type: "tel" },
-      { key: "openingMessage", label: "Pre-filled opening message" },
-      { key: "businessProfile", label: "Business profile (logo, hours, address)" }
+      { key: "whatsappNumber", label: "Verified WhatsApp number", type: "tel" },
+      { key: "openingMessage", label: "Pre-filled opening message" }
     ],
-    budgetHint: "Pair with Meta ads for click-to-WhatsApp at lowest CPL",
-    oauth: false
+    connect: (workspaceId) => api.whatsappConnect(workspaceId)
   }
 ];
 
 const PLATFORM_BY_ID = Object.fromEntries(PLATFORMS.map((platform) => [platform.id, platform]));
 
-const campaignGoals: Array<[string, string, string]> = [
-  ["WHATSAPP_MESSAGES", "WhatsApp messages", "Best for service businesses and direct sales"],
-  ["GENERATE_LEADS", "Lead generation", "Capture qualified leads into the inbox"],
-  ["GET_CALLS", "Phone calls", "Drive direct calls from high-intent users"],
-  ["WEBSITE_TRAFFIC", "Website traffic", "Send people to a landing page"],
-  ["REAL_ESTATE_LISTING", "Property listing", "Promote a single listing or open house"],
-  ["BOOK_APPOINTMENTS", "Book appointments", "Calendar slots, consultations, demos"],
-  ["EVENT_REGISTRATION", "Event registration", "Workshops, launches, webinars"]
+const campaignGoals: Array<[string, string]> = [
+  ["WHATSAPP_MESSAGES", "WhatsApp messages"],
+  ["GENERATE_LEADS", "Lead generation"],
+  ["GET_CALLS", "Phone calls"],
+  ["WEBSITE_TRAFFIC", "Website traffic"],
+  ["SELL_PRODUCTS", "Product sales"],
+  ["REAL_ESTATE_LISTING", "Property listing"],
+  ["BOOK_APPOINTMENTS", "Appointments"],
+  ["EVENT_REGISTRATION", "Event registration"]
 ];
 
 const leadStages = ["NEW_LEAD", "CONTACTED", "INTERESTED", "FOLLOW_UP", "APPOINTMENT_SCHEDULED", "NEGOTIATION", "WON", "LOST"];
@@ -281,7 +189,6 @@ function AuthPanel({ onReady, notify }: { onReady: () => void; notify: (toast: T
           ? await api.login({ email: String(form.get("email")), password: String(form.get("password")) })
           : await api.register({ name: String(form.get("name")), email: String(form.get("email")) });
       api.saveSession(session);
-      notify({ type: "success", message: "Welcome to Sart34" });
       onReady();
     } catch (error) {
       notify({ type: "error", message: error instanceof Error ? error.message : "Authentication failed." });
@@ -300,8 +207,7 @@ function AuthPanel({ onReady, notify }: { onReady: () => void; notify: (toast: T
       <section className="auth-card">
         <Brand large />
         <div className="auth-copy">
-          <h1>Post once.<br />Run ads everywhere.</h1>
-          <p>Upload a photo or video. Sart34 writes the copy, picks the audience, launches on every platform you connected, and shows you the results to approve.</p>
+          <h1>Sign in to Sart34</h1>
         </div>
         <div className="segmented" role="tablist">
           <button type="button" role="tab" aria-selected={mode === "login"} className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>Sign in</button>
@@ -309,18 +215,17 @@ function AuthPanel({ onReady, notify }: { onReady: () => void; notify: (toast: T
         </div>
         <form onSubmit={submit} className="form-stack">
           {mode === "register" ? (
-            <Field label="Your name"><input name="name" required placeholder="Ada Nwosu" autoComplete="name" /></Field>
+            <Field label="Your name"><input name="name" required autoComplete="name" /></Field>
           ) : null}
-          <Field label="Email"><input name="email" type="email" required placeholder="you@business.com" autoComplete="email" /></Field>
+          <Field label="Email"><input name="email" type="email" required autoComplete="email" /></Field>
           {mode === "login" ? (
-            <Field label="Password"><input name="password" type="password" required placeholder="•••••••••" autoComplete="current-password" /></Field>
+            <Field label="Password"><input name="password" type="password" required autoComplete="current-password" /></Field>
           ) : null}
           <button className="filled-button" disabled={loading}>
             {loading ? <Loader2 className="spin" size={18} /> : null}
-            {mode === "login" ? "Sign in" : "Create my account"}
+            {mode === "login" ? "Sign in" : "Create account"}
           </button>
         </form>
-        <p className="auth-fineprint">By continuing you agree to Sart34's terms and privacy policy. We never post to your accounts without approval.</p>
       </section>
     </main>
   );
@@ -366,13 +271,18 @@ function ConsoleApp({ onLogout, notify }: { onLogout: () => void; notify: (toast
 
 function BusinessConsole({ user, logout, notify }: { user: { firstName: string; email: string; role: string }; logout: () => void; notify: (toast: Toast) => void }) {
   const [tab, setTab] = useState<BusinessTab>("home");
+  const [createTemplate, setCreateTemplate] = useState<Template | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [campaignDetail, setCampaignDetail] = useState<Campaign | null>(null);
+  const [leadDetail, setLeadDetail] = useState<Lead | null>(null);
   const [issueCampaign, setIssueCampaign] = useState<Campaign | null>(null);
   const [connectPlatform, setConnectPlatform] = useState<PlatformDef | null>(null);
   const [loading, setLoading] = useState(true);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [creatives, setCreatives] = useState<Creative[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [accounts, setAccounts] = useState<IntegrationAccount[]>([]);
   const [overview, setOverview] = useState<{ walletBalance: number } | null>(null);
 
@@ -392,16 +302,20 @@ function BusinessConsole({ user, logout, notify }: { user: { firstName: string; 
     try {
       const activeWorkspace = await ensureWorkspace();
       setWorkspace(activeWorkspace);
-      const [campaignRows, leadRows, summary, accountRows] = await Promise.all([
+      const [campaignRows, leadRows, summary, accountRows, creativeRows, templateRows] = await Promise.all([
         api.campaigns(activeWorkspace.id),
         api.leads(activeWorkspace.id),
         api.overview(activeWorkspace.id),
-        api.integrations(activeWorkspace.id)
+        api.integrations(activeWorkspace.id),
+        api.creatives(activeWorkspace.id).catch(() => []),
+        api.templates().catch(() => [])
       ]);
       setCampaigns(campaignRows);
       setLeads(leadRows);
       setOverview(summary);
       setAccounts(accountRows);
+      setCreatives(creativeRows);
+      setTemplates(templateRows);
     } catch (error) {
       notify({ type: "error", message: error instanceof Error ? error.message : "Could not sync Sart34." });
     } finally {
@@ -412,9 +326,14 @@ function BusinessConsole({ user, logout, notify }: { user: { firstName: string; 
   useEffect(() => { void load(); }, []);
 
   const issueCount = useMemo(
-    () => campaigns.filter((campaign) => ["FAILED", "REJECTED", "NEEDS_INPUT", "POLICY_FLAGGED"].includes(campaign.status)).length,
+    () => campaigns.filter((campaign) => ["FAILED", "REJECTED"].includes(campaign.status)).length,
     [campaigns]
   );
+
+  function openCreate(template?: Template) {
+    setCreateTemplate(template ?? null);
+    setCreateOpen(true);
+  }
 
   return (
     <div className="shell">
@@ -431,44 +350,53 @@ function BusinessConsole({ user, logout, notify }: { user: { firstName: string; 
         }
       />
       <main className="main">
-        {loading && tab === "home" ? <FeedSkeleton /> : null}
+        {loading ? <FeedSkeleton /> : null}
         {!loading && tab === "home" ? (
           <HomeFeed
             user={user}
-            workspace={workspace}
             campaigns={campaigns}
             leads={leads}
             accounts={accounts}
             walletBalance={overview?.walletBalance ?? 0}
-            onCreate={() => setCreateOpen(true)}
             onConnect={(platform) => setConnectPlatform(platform)}
+            onOpenCampaign={setCampaignDetail}
             onFix={setIssueCampaign}
-            onAction={async (id, label, action) => {
-              try {
-                await action();
-                notify({ type: "success", message: `${label} done` });
-                await load();
-              } catch (error) {
-                notify({ type: "error", message: error instanceof Error ? error.message : `${label} failed` });
-              }
-            }}
           />
         ) : null}
-        {!loading && tab === "discover" ? <DiscoverPage campaigns={campaigns} leads={leads} accounts={accounts} /> : null}
+        {!loading && tab === "library" ? (
+          <LibraryPage
+            workspace={workspace}
+            creatives={creatives}
+            templates={templates}
+            campaigns={campaigns}
+            onUpload={async (file) => {
+              if (!workspace) return;
+              try {
+                await api.uploadCreative(file, workspace.id);
+                notify({ type: "success", message: "Uploaded" });
+                await load();
+              } catch (error) {
+                notify({ type: "error", message: error instanceof Error ? error.message : "Upload failed" });
+              }
+            }}
+            onDelete={async (id) => {
+              try {
+                await api.deleteCreative(id);
+                notify({ type: "success", message: "Removed" });
+                await load();
+              } catch (error) {
+                notify({ type: "error", message: error instanceof Error ? error.message : "Delete failed" });
+              }
+            }}
+            onUseTemplate={(template) => openCreate(template)}
+          />
+        ) : null}
         {!loading && tab === "inbox" ? (
           <InboxPage
             campaigns={campaigns}
             leads={leads}
             onFix={setIssueCampaign}
-            onMoveLead={async (lead) => {
-              try {
-                await api.updateLead(lead.id, { status: nextStage(lead.status) });
-                notify({ type: "success", message: "Lead moved" });
-                await load();
-              } catch (error) {
-                notify({ type: "error", message: error instanceof Error ? error.message : "Could not update lead" });
-              }
-            }}
+            onOpenLead={setLeadDetail}
           />
         ) : null}
         {!loading && tab === "profile" ? (
@@ -480,6 +408,15 @@ function BusinessConsole({ user, logout, notify }: { user: { firstName: string; 
             campaigns={campaigns}
             leads={leads}
             onConnect={(platform) => setConnectPlatform(platform)}
+            onDisconnect={async (id) => {
+              try {
+                await api.removeIntegration(id);
+                notify({ type: "success", message: "Disconnected" });
+                await load();
+              } catch (error) {
+                notify({ type: "error", message: error instanceof Error ? error.message : "Could not disconnect" });
+              }
+            }}
             onBuyCredits={async () => {
               if (!workspace) return;
               try {
@@ -490,6 +427,15 @@ function BusinessConsole({ user, logout, notify }: { user: { firstName: string; 
                 notify({ type: "error", message: error instanceof Error ? error.message : "Credit purchase failed" });
               }
             }}
+            onInvite={async (email) => {
+              if (!workspace) return;
+              try {
+                await api.inviteMember(workspace.id, email);
+                notify({ type: "success", message: "Invitation sent" });
+              } catch (error) {
+                notify({ type: "error", message: error instanceof Error ? error.message : "Invite failed" });
+              }
+            }}
             onLogout={logout}
           />
         ) : null}
@@ -497,18 +443,22 @@ function BusinessConsole({ user, logout, notify }: { user: { firstName: string; 
       <BottomNav
         tab={tab}
         onTab={setTab}
-        onCreate={() => setCreateOpen(true)}
+        onCreate={() => openCreate()}
         inboxBadge={leads.filter((lead) => lead.status === "NEW_LEAD").length + issueCount}
       />
       {createOpen && workspace ? (
         <CreateAdSheet
           workspace={workspace}
           accounts={accounts}
-          onClose={() => setCreateOpen(false)}
+          creatives={creatives}
+          templates={templates}
+          initialTemplate={createTemplate}
+          onClose={() => { setCreateOpen(false); setCreateTemplate(null); }}
           onConnect={(platform) => setConnectPlatform(platform)}
           onCreated={() => {
             setCreateOpen(false);
-            notify({ type: "success", message: "Ad submitted to the AI for review" });
+            setCreateTemplate(null);
+            notify({ type: "success", message: "Ad submitted to AI" });
             void load();
           }}
           notify={notify}
@@ -520,10 +470,6 @@ function BusinessConsole({ user, logout, notify }: { user: { firstName: string; 
           workspace={workspace}
           accounts={accounts}
           onClose={() => setConnectPlatform(null)}
-          onConnected={() => {
-            setConnectPlatform(null);
-            void load();
-          }}
           notify={notify}
         />
       ) : null}
@@ -533,9 +479,25 @@ function BusinessConsole({ user, logout, notify }: { user: { firstName: string; 
           onClose={() => setIssueCampaign(null)}
           onResolved={() => {
             setIssueCampaign(null);
-            notify({ type: "success", message: "Sart34 retried the launch" });
+            notify({ type: "success", message: "Resubmitted" });
             void load();
           }}
+          notify={notify}
+        />
+      ) : null}
+      {campaignDetail ? (
+        <CampaignDetailSheet
+          campaign={campaignDetail}
+          onClose={() => setCampaignDetail(null)}
+          onChange={async () => { await load(); }}
+          notify={notify}
+        />
+      ) : null}
+      {leadDetail ? (
+        <LeadDetailSheet
+          lead={leadDetail}
+          onClose={() => setLeadDetail(null)}
+          onChange={async () => { await load(); }}
           notify={notify}
         />
       ) : null}
@@ -543,10 +505,10 @@ function BusinessConsole({ user, logout, notify }: { user: { firstName: string; 
   );
 }
 
-function AppBar({ title, subtitle, right, leading }: { title: string; subtitle?: string; right?: ReactNode; leading?: ReactNode }) {
+function AppBar({ title, subtitle, right }: { title: string; subtitle?: string; right?: ReactNode }) {
   return (
     <header className="appbar">
-      {leading ? <div className="appbar-leading">{leading}</div> : <Brand />}
+      <Brand />
       <div className="appbar-titles">
         <strong>{title}</strong>
         {subtitle ? <span>{subtitle}</span> : null}
@@ -581,7 +543,7 @@ function BottomNav({ tab, onTab, onCreate, inboxBadge }: { tab: BusinessTab; onT
   return (
     <nav className="bottom-nav" role="navigation" aria-label="Primary">
       <BottomTab active={tab === "home"} onClick={() => onTab("home")} icon={<Home />} label="Home" />
-      <BottomTab active={tab === "discover"} onClick={() => onTab("discover")} icon={<Compass />} label="Discover" />
+      <BottomTab active={tab === "library"} onClick={() => onTab("library")} icon={<FolderOpen />} label="Library" />
       <button className="fab" onClick={onCreate} aria-label="Create ad"><Plus size={26} /></button>
       <BottomTab active={tab === "inbox"} onClick={() => onTab("inbox")} icon={<Inbox />} label="Inbox" badge={inboxBadge} />
       <BottomTab active={tab === "profile"} onClick={() => onTab("profile")} icon={<UserRound />} label="You" />
@@ -600,39 +562,43 @@ function BottomTab({ active, onClick, icon, label, badge }: { active: boolean; o
 
 function HomeFeed({
   user,
-  workspace,
   campaigns,
   leads,
   accounts,
   walletBalance,
-  onCreate,
   onConnect,
-  onFix,
-  onAction
+  onOpenCampaign,
+  onFix
 }: {
   user: { firstName: string };
-  workspace: Workspace | null;
   campaigns: Campaign[];
   leads: Lead[];
   accounts: IntegrationAccount[];
   walletBalance: number;
-  onCreate: () => void;
   onConnect: (platform: PlatformDef) => void;
+  onOpenCampaign: (campaign: Campaign) => void;
   onFix: (campaign: Campaign) => void;
-  onAction: (id: string, label: string, action: () => Promise<unknown>) => Promise<void>;
 }) {
   const connectedIds = new Set(accounts.filter((account) => account.status === "CONNECTED").map((account) => account.provider));
   const pendingLeads = leads.filter((lead) => !["WON", "LOST"].includes(lead.status)).length;
-  const totalImpressions = campaigns.reduce((sum) => sum + 0, 0);
+  const totals = campaigns.reduce(
+    (sum, campaign) => {
+      const metric = (campaign as { metrics?: Array<{ impressions: number; leads: number }> }).metrics?.[0];
+      return {
+        impressions: sum.impressions + (metric?.impressions ?? 0),
+        leadsCount: sum.leadsCount + (metric?.leads ?? 0)
+      };
+    },
+    { impressions: 0, leadsCount: 0 }
+  );
 
   return (
     <div className="feed">
       <section className="hero-greeting">
         <div>
           <span>Welcome back</span>
-          <h2>Hi {user.firstName}, what are we launching today?</h2>
+          <h2>Hi {user.firstName}</h2>
         </div>
-        <button className="filled-button compact" onClick={onCreate}><Plus size={18} /> New ad</button>
       </section>
 
       <section className="story-rail" aria-label="Connected platforms">
@@ -653,39 +619,20 @@ function HomeFeed({
       <section className="metric-row">
         <MetricChip icon={<Send size={18} />} label="Active ads" value={String(campaigns.filter((campaign) => ["ACTIVE", "READY_TO_LAUNCH", "SUBMITTED"].includes(campaign.status)).length)} />
         <MetricChip icon={<MessageCircle size={18} />} label="Open leads" value={String(pendingLeads)} accent="success" />
-        <MetricChip icon={<Eye size={18} />} label="Impressions" value={totalImpressions.toLocaleString()} />
+        <MetricChip icon={<Eye size={18} />} label="Impressions" value={totals.impressions.toLocaleString()} />
         <MetricChip icon={<Wallet size={18} />} label="Credits" value={String(walletBalance)} accent="warn" />
       </section>
 
-      {connectedIds.size === 0 ? (
-        <article className="connect-cta">
-          <div>
-            <Sparkles size={22} />
-            <h3>Connect your first platform</h3>
-            <p>Sart34 launches your ads natively on Meta, Google, TikTok and more. Connect one to start.</p>
-          </div>
-          <div className="connect-cta-grid">
-            {PLATFORMS.slice(0, 6).map((platform) => (
-              <button key={platform.id} className="platform-tile" style={{ ['--accent' as never]: platform.accent }} onClick={() => onConnect(platform)}>
-                <span className="platform-tile-glyph" style={{ background: platform.accent }}>{platform.glyph}</span>
-                <strong>{platform.name}</strong>
-                <span>{platform.short}</span>
-              </button>
-            ))}
-          </div>
-        </article>
-      ) : null}
-
       {campaigns.length === 0 ? (
-        <EmptyFeed onCreate={onCreate} />
+        <EmptyFeed />
       ) : (
         <div className="feed-stack">
           {campaigns.map((campaign) => (
             <AdPostCard
               key={campaign.id}
               campaign={campaign}
+              onOpen={() => onOpenCampaign(campaign)}
               onFix={() => onFix(campaign)}
-              onAction={(label, action) => onAction(campaign.id, label, action)}
             />
           ))}
         </div>
@@ -706,26 +653,17 @@ function MetricChip({ icon, label, value, accent }: { icon: ReactNode; label: st
   );
 }
 
-function AdPostCard({ campaign, onFix, onAction }: { campaign: Campaign; onFix: () => void; onAction: (label: string, action: () => Promise<unknown>) => void }) {
-  const [busy, setBusy] = useState<string | null>(null);
+function AdPostCard({ campaign, onOpen, onFix }: { campaign: Campaign; onOpen: () => void; onFix: () => void }) {
   const platforms = campaignPlatforms(campaign);
   const status = campaign.status;
-  const issue = ["FAILED", "REJECTED", "NEEDS_INPUT", "POLICY_FLAGGED"].includes(status);
+  const issue = ["FAILED", "REJECTED"].includes(status);
   const live = ["ACTIVE", "READY_TO_LAUNCH", "SUBMITTED"].includes(status);
   const creative = campaign.creatives?.[0];
   const goal = campaignGoals.find(([value]) => value === campaign.goal);
-
-  async function trigger(label: string, action: () => Promise<unknown>) {
-    setBusy(label);
-    try {
-      await action();
-    } finally {
-      setBusy(null);
-    }
-  }
+  const metric = (campaign as { metrics?: Array<{ impressions: number; leads: number; clicks: number }> }).metrics?.[0];
 
   return (
-    <article className={`post-card ${live ? "live" : ""} ${issue ? "issue" : ""}`}>
+    <article className={`post-card ${live ? "live" : ""} ${issue ? "issue" : ""}`} onClick={onOpen} role="button" tabIndex={0}>
       <header className="post-head">
         <div className="post-author">
           <span className="post-avatar"><Sparkles size={16} /></span>
@@ -734,20 +672,19 @@ function AdPostCard({ campaign, onFix, onAction }: { campaign: Campaign; onFix: 
             <span>{goal?.[1] ?? campaign.goal} · {timeAgo(campaign.createdAt)}</span>
           </div>
         </div>
-        <button className="ghost-icon" aria-label="More"><MoreHorizontal size={20} /></button>
+        <button className="ghost-icon" aria-label="More" onClick={(event) => { event.stopPropagation(); onOpen(); }}><MoreHorizontal size={20} /></button>
       </header>
 
       <div className="post-creative" role="img" aria-label="Ad creative">
         {creative ? (
           /\.(mp4|mov|webm)$/i.test(creative.fileName) ? (
-            <video src={creative.fileUrl} controls />
+            <video src={creative.fileUrl} muted loop playsInline />
           ) : (
             <img src={creative.fileUrl} alt={campaign.name} />
           )
         ) : (
           <div className="post-creative-placeholder">
             <ImagePlus size={32} />
-            <span>{campaign.objective ?? "AI is drafting your visual"}</span>
           </div>
         )}
       </div>
@@ -762,102 +699,178 @@ function AdPostCard({ campaign, onFix, onAction }: { campaign: Campaign; onFix: 
         <StatusPill value={status} />
       </div>
 
-      {issue ? (
-        <div className="post-issue">
-          <AlertTriangle size={18} />
-          <div>
-            <strong>Sart34 needs your input</strong>
-            <span>{summarizeIssue(campaign)}</span>
-          </div>
-          <button className="filled-button compact danger" onClick={onFix}>Fix now</button>
+      {metric ? (
+        <div className="post-metrics">
+          <MiniMetric label="Impressions" value={metric.impressions.toLocaleString()} />
+          <MiniMetric label="Clicks" value={metric.clicks.toLocaleString()} />
+          <MiniMetric label="Leads" value={metric.leads.toLocaleString()} />
         </div>
       ) : null}
 
-      <footer className="post-actions">
-        <button className="post-action" disabled={busy !== null} onClick={() => trigger("AI", () => api.generateCampaign(campaign.id)).then(() => onAction("AI generation", async () => undefined))}>
-          {busy === "AI" ? <Loader2 className="spin" size={18} /> : <Sparkles size={18} />}
-          <span>Generate</span>
-        </button>
-        <button className="post-action" disabled={busy !== null} onClick={() => trigger("Review", () => api.reviewCampaign(campaign.id)).then(() => onAction("Policy review", async () => undefined))}>
-          {busy === "Review" ? <Loader2 className="spin" size={18} /> : <Shield size={18} />}
-          <span>Review</span>
-        </button>
-        <button className="post-action" disabled={busy !== null} onClick={() => trigger("Approve", () => api.approveCampaign(campaign.id)).then(() => onAction("Approval", async () => undefined))}>
-          {busy === "Approve" ? <Loader2 className="spin" size={18} /> : <BadgeCheck size={18} />}
-          <span>Approve</span>
-        </button>
-        <button className="post-action primary" disabled={busy !== null} onClick={() => trigger("Launch", () => api.launchCampaign(campaign.id)).then(() => onAction("Launch", async () => undefined))}>
-          {busy === "Launch" ? <Loader2 className="spin" size={18} /> : <Send size={18} />}
-          <span>Launch</span>
-        </button>
-      </footer>
+      {issue ? (
+        <div className="post-issue" onClick={(event) => event.stopPropagation()}>
+          <AlertTriangle size={18} />
+          <div>
+            <strong>Action needed</strong>
+            <span>{summarizeIssue(campaign)}</span>
+          </div>
+          <button className="filled-button compact danger" onClick={(event) => { event.stopPropagation(); onFix(); }}>Fix</button>
+        </div>
+      ) : null}
     </article>
   );
 }
 
-function EmptyFeed({ onCreate }: { onCreate: () => void }) {
+function MiniMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="mini-metric">
+      <strong>{value}</strong>
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function EmptyFeed() {
   return (
     <article className="empty-feed">
       <div className="empty-feed-art" aria-hidden="true"><Sparkles size={28} /></div>
-      <h3>Your feed is ready for its first ad</h3>
-      <p>Tap the plus button. Upload one photo or video. Sart34 writes the headlines, picks the audience, lets you preview each platform, and you simply approve.</p>
-      <button className="filled-button" onClick={onCreate}><Plus size={18} /> Create your first ad</button>
+      <h3>No ads yet</h3>
+      <p>Tap the plus button to upload media, pick platforms, and let Sart34 set up the rest.</p>
     </article>
   );
 }
 
-function DiscoverPage({ campaigns, leads, accounts }: { campaigns: Campaign[]; leads: Lead[]; accounts: IntegrationAccount[] }) {
-  const connected = accounts.filter((account) => account.status === "CONNECTED").length;
-  const won = leads.filter((lead) => lead.status === "WON").length;
-  const open = leads.filter((lead) => !["WON", "LOST"].includes(lead.status)).length;
+function LibraryPage({
+  workspace,
+  creatives,
+  templates,
+  campaigns,
+  onUpload,
+  onDelete,
+  onUseTemplate
+}: {
+  workspace: Workspace | null;
+  creatives: Creative[];
+  templates: Template[];
+  campaigns: Campaign[];
+  onUpload: (file: File) => void | Promise<void>;
+  onDelete: (id: string) => void | Promise<void>;
+  onUseTemplate: (template: Template) => void;
+}) {
+  const [tab, setTab] = useState<"creatives" | "templates" | "reports">("creatives");
+  const fileInput = useRef<HTMLInputElement>(null);
+
   return (
     <div className="page">
-      <h2 className="page-title">Discover</h2>
-      <p className="page-sub">Insights across every platform, in one place.</p>
-      <section className="card">
-        <header className="card-head">
-          <div><strong>This week</strong><span>Combined performance</span></div>
-          <span className="trend"><TrendingUp size={16} /> Live</span>
-        </header>
-        <div className="kpi-grid">
-          <KPI label="Impressions" value="0" />
-          <KPI label="Clicks" value="0" />
-          <KPI label="Leads" value={String(leads.length)} accent="success" />
-          <KPI label="Won deals" value={String(won)} accent="success" />
-          <KPI label="Open leads" value={String(open)} />
-          <KPI label="Connected" value={`${connected}/${PLATFORMS.length}`} />
-        </div>
-      </section>
-      <section className="card">
-        <header className="card-head">
-          <div><strong>Best performing platforms</strong><span>Auto-rank by leads per credit</span></div>
-        </header>
-        <div className="rank-list">
-          {PLATFORMS.slice(0, 5).map((platform, index) => (
-            <div className="rank-row" key={platform.id}>
-              <span className="rank-num">{index + 1}</span>
-              <span className="platform-pill compact" style={{ ['--accent' as never]: platform.accent }}>
-                <span className="platform-pill-glyph" style={{ background: platform.accent }}>{platform.glyph}</span>
-                {platform.name}
-              </span>
-              <span className="rank-meta">{platform.budgetHint}</span>
+      <h2 className="page-title">Library</h2>
+      <div className="segmented">
+        <button className={tab === "creatives" ? "active" : ""} onClick={() => setTab("creatives")}>Creatives {creatives.length ? <b>{creatives.length}</b> : null}</button>
+        <button className={tab === "templates" ? "active" : ""} onClick={() => setTab("templates")}>Templates</button>
+        <button className={tab === "reports" ? "active" : ""} onClick={() => setTab("reports")}>Reports</button>
+      </div>
+
+      {tab === "creatives" ? (
+        <section className="card">
+          <header className="card-head">
+            <div><strong>Your media</strong><span>Reuse across campaigns</span></div>
+            <button className="filled-button compact" onClick={() => fileInput.current?.click()}><Upload size={16} /> Upload</button>
+            <input ref={fileInput} type="file" accept="image/*,video/*" hidden onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) void onUpload(file);
+              event.target.value = "";
+            }} />
+          </header>
+          {creatives.length === 0 ? (
+            <div className="empty"><ImagePlus size={26} /><strong>Nothing saved yet</strong><span>Upload photos, videos, flyers or logos.</span></div>
+          ) : (
+            <div className="media-grid">
+              {creatives.map((creative) => (
+                <figure className="media-tile" key={creative.id}>
+                  {/\.(mp4|mov|webm)$/i.test(creative.fileName) ? (
+                    <video src={creative.fileUrl} muted loop playsInline />
+                  ) : (
+                    <img src={creative.fileUrl} alt={creative.fileName} />
+                  )}
+                  <figcaption>
+                    <span>{creative.fileName}</span>
+                    <button className="ghost-icon" aria-label="Delete" onClick={() => onDelete(creative.id)}><Trash2 size={16} /></button>
+                  </figcaption>
+                </figure>
+              ))}
             </div>
-          ))}
-        </div>
-      </section>
-      <section className="card">
-        <header className="card-head"><div><strong>Recent ads</strong><span>{campaigns.length} total</span></div></header>
-        <div className="mini-list">
-          {campaigns.slice(0, 6).map((campaign) => (
-            <div className="mini-row" key={campaign.id}>
-              <strong>{campaign.name}</strong>
-              <StatusPill value={campaign.status} compact />
-            </div>
-          ))}
-          {campaigns.length === 0 ? <p className="muted">No ads yet.</p> : null}
-        </div>
-      </section>
+          )}
+        </section>
+      ) : null}
+
+      {tab === "templates" ? (
+        <section className="card">
+          <header className="card-head"><div><strong>Campaign templates</strong><span>Start with a proven structure</span></div></header>
+          <div className="template-grid">
+            {templates.map((template) => (
+              <article className="template-card" key={template.id}>
+                <span className="template-tag">{template.industry}</span>
+                <strong>{template.name}</strong>
+                <span className="template-desc">{template.description}</span>
+                <div className="template-meta">
+                  <span>NGN {template.defaultDailyBudget.toLocaleString()} / day</span>
+                  <span>{template.defaultDurationDays} days</span>
+                </div>
+                <div className="template-platforms">
+                  {template.recommendedPlatforms.map((id) => {
+                    const platform = PLATFORM_BY_ID[id];
+                    if (!platform) return null;
+                    return (
+                      <span key={id} className="platform-pill compact" style={{ ['--accent' as never]: platform.accent }}>
+                        <span className="platform-pill-glyph" style={{ background: platform.accent }}>{platform.glyph}</span>
+                        {platform.name}
+                      </span>
+                    );
+                  })}
+                </div>
+                <button className="filled-button compact" onClick={() => onUseTemplate(template)}>Use template</button>
+              </article>
+            ))}
+            {templates.length === 0 ? <div className="empty"><Layout size={26} /><strong>No templates yet</strong></div> : null}
+          </div>
+        </section>
+      ) : null}
+
+      {tab === "reports" ? <ReportsView campaigns={campaigns} workspace={workspace} /> : null}
     </div>
+  );
+}
+
+function ReportsView({ campaigns, workspace }: { campaigns: Campaign[]; workspace: Workspace | null }) {
+  const totals = campaigns.reduce(
+    (sum, campaign) => {
+      const metrics = (campaign as { metrics?: Array<{ impressions: number; clicks: number; leads: number; spend: number }> }).metrics ?? [];
+      for (const metric of metrics) {
+        sum.impressions += metric.impressions;
+        sum.clicks += metric.clicks;
+        sum.leads += metric.leads;
+        sum.spend += Number(metric.spend ?? 0);
+      }
+      return sum;
+    },
+    { impressions: 0, clicks: 0, leads: 0, spend: 0 }
+  );
+  const cpl = totals.leads ? Math.round(totals.spend / totals.leads) : 0;
+
+  return (
+    <section className="card">
+      <header className="card-head"><div><strong>Performance</strong><span>{workspace?.name ?? "Studio"}</span></div></header>
+      <div className="kpi-grid four">
+        <KPI label="Impressions" value={totals.impressions.toLocaleString()} />
+        <KPI label="Clicks" value={totals.clicks.toLocaleString()} />
+        <KPI label="Leads" value={totals.leads.toLocaleString()} accent="success" />
+        <KPI label="Spend" value={`NGN ${totals.spend.toLocaleString()}`} />
+      </div>
+      <div className="kpi-grid">
+        <KPI label="Cost per lead" value={cpl ? `NGN ${cpl.toLocaleString()}` : "—"} />
+        <KPI label="Active ads" value={String(campaigns.filter((campaign) => campaign.status === "ACTIVE").length)} />
+        <KPI label="Total ads" value={String(campaigns.length)} />
+      </div>
+    </section>
   );
 }
 
@@ -865,14 +878,13 @@ function KPI({ label, value, accent }: { label: string; value: string; accent?: 
   return <div className={`kpi ${accent ?? ""}`}><strong>{value}</strong><span>{label}</span></div>;
 }
 
-function InboxPage({ campaigns, leads, onFix, onMoveLead }: { campaigns: Campaign[]; leads: Lead[]; onFix: (campaign: Campaign) => void; onMoveLead: (lead: Lead) => void }) {
+function InboxPage({ campaigns, leads, onFix, onOpenLead }: { campaigns: Campaign[]; leads: Lead[]; onFix: (campaign: Campaign) => void; onOpenLead: (lead: Lead) => void }) {
   const [tab, setTab] = useState<"actions" | "leads">("actions");
-  const issues = campaigns.filter((campaign) => ["FAILED", "REJECTED", "NEEDS_INPUT", "POLICY_FLAGGED"].includes(campaign.status));
+  const issues = campaigns.filter((campaign) => ["FAILED", "REJECTED"].includes(campaign.status));
 
   return (
     <div className="page">
       <h2 className="page-title">Inbox</h2>
-      <p className="page-sub">Action required from you, leads from your ads.</p>
       <div className="segmented">
         <button className={tab === "actions" ? "active" : ""} onClick={() => setTab("actions")}>
           Actions {issues.length ? <b>{issues.length}</b> : null}
@@ -884,11 +896,7 @@ function InboxPage({ campaigns, leads, onFix, onMoveLead }: { campaigns: Campaig
       {tab === "actions" ? (
         <section className="card">
           {issues.length === 0 ? (
-            <div className="empty">
-              <ShieldCheck size={28} />
-              <strong>All clear</strong>
-              <span>No platform is asking for input right now.</span>
-            </div>
+            <div className="empty"><ShieldCheck size={28} /><strong>All clear</strong></div>
           ) : (
             <ul className="action-list">
               {issues.map((campaign) => (
@@ -907,15 +915,11 @@ function InboxPage({ campaigns, leads, onFix, onMoveLead }: { campaigns: Campaig
       ) : (
         <section className="card">
           {leads.length === 0 ? (
-            <div className="empty">
-              <Inbox size={28} />
-              <strong>No leads yet</strong>
-              <span>New replies, calls, and form submissions arrive here.</span>
-            </div>
+            <div className="empty"><Inbox size={28} /><strong>No leads yet</strong></div>
           ) : (
             <ul className="lead-list">
               {leads.map((lead) => (
-                <li key={lead.id} className={lead.status === "NEW_LEAD" ? "unread" : ""}>
+                <li key={lead.id} className={lead.status === "NEW_LEAD" ? "unread" : ""} onClick={() => onOpenLead(lead)}>
                   <span className="lead-avatar">{lead.fullName.charAt(0)?.toUpperCase()}</span>
                   <div className="lead-text">
                     <strong>{lead.fullName}</strong>
@@ -924,7 +928,6 @@ function InboxPage({ campaigns, leads, onFix, onMoveLead }: { campaigns: Campaig
                   </div>
                   <div className="lead-actions">
                     <StatusPill value={lead.status} compact />
-                    <button className="ghost-button" onClick={() => onMoveLead(lead)}>Move <ArrowRight size={14} /></button>
                   </div>
                 </li>
               ))}
@@ -944,7 +947,9 @@ function ProfilePage({
   campaigns,
   leads,
   onConnect,
+  onDisconnect,
   onBuyCredits,
+  onInvite,
   onLogout
 }: {
   user: { firstName: string; email: string; role: string };
@@ -954,7 +959,9 @@ function ProfilePage({
   campaigns: Campaign[];
   leads: Lead[];
   onConnect: (platform: PlatformDef) => void;
+  onDisconnect: (id: string) => void | Promise<void>;
   onBuyCredits: () => void;
+  onInvite: (email: string) => void | Promise<void>;
   onLogout: () => void;
 }) {
   const accountByProvider = useMemo(() => {
@@ -965,6 +972,24 @@ function ProfilePage({
 
   const wonLeads = leads.filter((lead) => lead.status === "WON").length;
   const liveAds = campaigns.filter((campaign) => campaign.status === "ACTIVE").length;
+
+  const [members, setMembers] = useState<Array<{ id: string; role: string; user: { firstName: string; lastName: string; email: string } }>>([]);
+  const [memberLoading, setMemberLoading] = useState(false);
+  const [transactions, setTransactions] = useState<Array<{ id: string; amount: number; reason: string; createdAt: string; type: string }>>([]);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+
+  useEffect(() => {
+    if (!workspace) return;
+    setMemberLoading(true);
+    api.workspaceDetail(workspace.id)
+      .then((detail) => setMembers(detail.members ?? []))
+      .catch(() => undefined)
+      .finally(() => setMemberLoading(false));
+    api.walletTransactions(workspace.id)
+      .then(setTransactions)
+      .catch(() => undefined);
+  }, [workspace?.id]);
 
   return (
     <div className="page profile-page">
@@ -988,7 +1013,7 @@ function ProfilePage({
 
       <section className="card">
         <header className="card-head">
-          <div><strong>Connected accounts</strong><span>One tap to manage permissions on each platform</span></div>
+          <div><strong>Connected accounts</strong></div>
           <span className="muted small">{accounts.filter((account) => account.status === "CONNECTED").length}/{PLATFORMS.length}</span>
         </header>
         <div className="connect-grid">
@@ -1009,10 +1034,10 @@ function ProfilePage({
                       <BadgeCheck size={16} />
                       <span>{account?.accountName ?? "Connected"}</span>
                     </>
-                  ) : status === "EXPIRED" || status === "ERROR" ? (
+                  ) : status === "EXPIRED" || status === "FAILED" ? (
                     <>
                       <AlertTriangle size={16} />
-                      <span>Action needed</span>
+                      <span>Reconnect</span>
                     </>
                   ) : (
                     <>
@@ -1028,27 +1053,77 @@ function ProfilePage({
       </section>
 
       <section className="card">
-        <header className="card-head"><div><strong>Wallet</strong><span>Sart34 credits are separate from ad spend</span></div></header>
-        <div className="wallet-row">
-          <div>
-            <strong className="wallet-amount">{walletBalance}</strong>
-            <span className="muted">credits available</span>
-          </div>
-          <button className="filled-button" onClick={onBuyCredits}><CircleDollarSign size={18} /> Top up</button>
-        </div>
+        <header className="card-head">
+          <div><strong>Wallet</strong><span>{walletBalance} credits</span></div>
+          <button className="filled-button compact" onClick={onBuyCredits}><CircleDollarSign size={16} /> Top up</button>
+        </header>
+        {transactions.length > 0 ? (
+          <ul className="txn-list">
+            {transactions.slice(0, 6).map((txn) => (
+              <li key={txn.id}>
+                <div>
+                  <strong>{txn.reason}</strong>
+                  <span>{new Date(txn.createdAt).toLocaleDateString()}</span>
+                </div>
+                <span className={`txn-amount ${txn.amount < 0 ? "negative" : "positive"}`}>{txn.amount > 0 ? "+" : ""}{txn.amount}</span>
+              </li>
+            ))}
+          </ul>
+        ) : null}
       </section>
 
       <section className="card">
-        <header className="card-head"><div><strong>Settings</strong><span>{workspace?.name ?? "Studio"}</span></div></header>
+        <header className="card-head">
+          <div><strong>Team</strong><span>{members.length} member{members.length === 1 ? "" : "s"}</span></div>
+          <button className="filled-button compact" onClick={() => setInviteOpen(true)}><UserPlus size={16} /> Invite</button>
+        </header>
+        {memberLoading ? <div className="empty"><Loader2 className="spin" size={18} /></div> : (
+          <ul className="member-list">
+            {members.map((member) => (
+              <li key={member.id}>
+                <span className="member-avatar">{member.user.firstName?.[0]?.toUpperCase()}</span>
+                <div>
+                  <strong>{member.user.firstName} {member.user.lastName}</strong>
+                  <span>{member.user.email}</span>
+                </div>
+                <span className="status muted compact">{member.role.toLowerCase().replaceAll("_", " ")}</span>
+              </li>
+            ))}
+            {members.length === 0 ? <div className="empty"><Users size={22} /><strong>Just you</strong></div> : null}
+          </ul>
+        )}
+      </section>
+
+      <section className="card">
+        <header className="card-head"><div><strong>Settings</strong></div></header>
         <ul className="setting-list">
-          <SettingRow icon={<Settings size={18} />} title="Business profile" subtitle={workspace?.name ?? "Default workspace"} />
+          <SettingRow icon={<Settings size={18} />} title="Business" subtitle={workspace?.name ?? "Default"} />
           <SettingRow icon={<CircleDollarSign size={18} />} title="Currency" subtitle={workspace?.defaultCurrency ?? "NGN"} />
-          <SettingRow icon={<Bell size={18} />} title="Notifications" subtitle="WhatsApp, email, push" />
+          <SettingRow icon={<Bell size={18} />} title="Notifications" subtitle="WhatsApp, email" />
           <SettingRow icon={<Shield size={18} />} title="Permissions" subtitle={user.role.replaceAll("_", " ").toLowerCase()} />
         </ul>
       </section>
 
       <button className="ghost-button danger full" onClick={onLogout}><LogOut size={18} /> Sign out</button>
+
+      {inviteOpen ? (
+        <FullSheet onClose={() => setInviteOpen(false)} title="Invite a teammate">
+          <div className="sheet-body">
+            <Field label="Email">
+              <input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="teammate@business.com" />
+            </Field>
+          </div>
+          <footer className="sheet-footer">
+            <button className="ghost-button" onClick={() => setInviteOpen(false)}>Cancel</button>
+            <button className="filled-button" onClick={async () => {
+              if (!inviteEmail) return;
+              await onInvite(inviteEmail);
+              setInviteOpen(false);
+              setInviteEmail("");
+            }}><UserPlus size={18} /> Send invite</button>
+          </footer>
+        </FullSheet>
+      ) : null}
     </div>
   );
 }
@@ -1066,6 +1141,9 @@ function SettingRow({ icon, title, subtitle }: { icon: ReactNode; title: string;
 function CreateAdSheet({
   workspace,
   accounts,
+  creatives,
+  templates,
+  initialTemplate,
   onClose,
   onConnect,
   onCreated,
@@ -1073,43 +1151,81 @@ function CreateAdSheet({
 }: {
   workspace: Workspace;
   accounts: IntegrationAccount[];
+  creatives: Creative[];
+  templates: Template[];
+  initialTemplate: Template | null;
   onClose: () => void;
   onConnect: (platform: PlatformDef) => void;
   onCreated: () => void;
   notify: (toast: Toast) => void;
 }) {
-  const steps = ["Upload", "Brief", "Platforms", "Audience", "Budget", "Preview", "Approve"] as const;
-  const [step, setStep] = useState(0);
-  const [media, setMedia] = useState<{ file: File; url: string; kind: "image" | "video" } | null>(null);
-  const [brief, setBrief] = useState({ name: "", productName: "", offer: "", description: "", goal: "GENERATE_LEADS" });
+  const steps = ["Start", "Upload", "Brief", "Platforms", "Audience", "Budget", "Preview", "Approve"] as const;
+  const [step, setStep] = useState(initialTemplate ? 1 : 0);
+  const [template, setTemplate] = useState<Template | null>(initialTemplate);
+  const [uploadedCreative, setUploadedCreative] = useState<Creative | null>(null);
+  const [pickedCreative, setPickedCreative] = useState<Creative | null>(null);
+  const [localMedia, setLocalMedia] = useState<{ file: File; url: string; kind: "image" | "video" } | null>(null);
+  const [brief, setBrief] = useState({
+    name: initialTemplate?.name ?? "",
+    productName: "",
+    price: "",
+    offer: "",
+    description: "",
+    goal: initialTemplate?.goal ?? "GENERATE_LEADS"
+  });
   const connectedIds = new Set(accounts.filter((account) => account.status === "CONNECTED").map((account) => account.provider));
-  const initialPlatforms = PLATFORMS.filter((platform) => connectedIds.has(platform.id)).map((platform) => platform.id);
+  const initialPlatforms = (initialTemplate?.recommendedPlatforms ?? PLATFORMS.map((platform) => platform.id))
+    .filter((id) => connectedIds.has(id) || id === "META");
   const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(initialPlatforms.length ? initialPlatforms : ["META"]);
-  const [audience, setAudience] = useState({ location: "", ageMin: 18, ageMax: 45, interests: "", gender: "ALL" });
-  const [budget, setBudget] = useState({ daily: 5000, durationDays: 14, callToAction: "Send WhatsApp message" });
+  const [audience, setAudience] = useState({ location: "", ageMin: 18, ageMax: 45, interests: initialTemplate?.audienceHints ?? "", gender: "ALL" });
+  const [budget, setBudget] = useState({
+    daily: initialTemplate?.defaultDailyBudget ?? 5000,
+    durationDays: initialTemplate?.defaultDurationDays ?? 14,
+    callToAction: initialTemplate?.callToAction ?? "Send WhatsApp message"
+  });
   const [submitting, setSubmitting] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  function pickFile(event: ChangeEvent<HTMLInputElement>) {
+  async function pickFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
     const url = URL.createObjectURL(file);
-    setMedia({ file, url, kind: file.type.startsWith("video") ? "video" : "image" });
+    setLocalMedia({ file, url, kind: file.type.startsWith("video") ? "video" : "image" });
+    try {
+      const uploaded = await api.uploadCreative(file, workspace.id);
+      setUploadedCreative(uploaded);
+      setPickedCreative(uploaded);
+    } catch (error) {
+      notify({ type: "error", message: error instanceof Error ? error.message : "Upload failed" });
+    }
   }
 
   function togglePlatform(id: string) {
     setSelectedPlatforms((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
   }
 
+  function applyTemplate(value: Template) {
+    setTemplate(value);
+    setBrief((current) => ({ ...current, name: value.name, goal: value.goal }));
+    setBudget({
+      daily: value.defaultDailyBudget,
+      durationDays: value.defaultDurationDays,
+      callToAction: value.callToAction
+    });
+    setAudience((current) => ({ ...current, interests: value.audienceHints }));
+    setSelectedPlatforms(value.recommendedPlatforms);
+    setStep(1);
+  }
+
   async function submit() {
     if (!brief.name) {
-      notify({ type: "error", message: "Give your ad a name first." });
-      setStep(1);
+      notify({ type: "error", message: "Give your ad a name" });
+      setStep(2);
       return;
     }
     setSubmitting(true);
     try {
-      await api.createCampaign({
+      const created = await api.createCampaign({
         workspaceId: workspace.id,
         name: brief.name,
         goal: brief.goal,
@@ -1118,6 +1234,7 @@ function CreateAdSheet({
         durationDays: Number(budget.durationDays),
         productDetails: {
           productName: brief.productName,
+          price: brief.price,
           offer: brief.offer,
           audience: audience.interests,
           location: audience.location,
@@ -1128,9 +1245,18 @@ function CreateAdSheet({
           ageMin: audience.ageMin,
           ageMax: audience.ageMax,
           gender: audience.gender,
-          creativeName: media?.file.name
+          templateId: template?.id
         }
       });
+      if (pickedCreative) {
+        await api.attachCreatives(created.id, [pickedCreative.id]).catch(() => undefined);
+      }
+      try {
+        await api.generateCampaign(created.id);
+        await api.reviewCampaign(created.id);
+      } catch (error) {
+        // AI generation runs best-effort. If it fails, the user can retry from the detail sheet.
+      }
       onCreated();
     } catch (error) {
       notify({ type: "error", message: error instanceof Error ? error.message : "Could not save the ad." });
@@ -1141,6 +1267,11 @@ function CreateAdSheet({
 
   function next() { setStep((current) => Math.min(steps.length - 1, current + 1)); }
   function back() { setStep((current) => Math.max(0, current - 1)); }
+
+  const previewMedia = localMedia ?? (pickedCreative ? {
+    url: pickedCreative.fileUrl,
+    kind: /\.(mp4|mov|webm)$/i.test(pickedCreative.fileName) ? "video" as const : "image" as const
+  } : null);
 
   return (
     <FullSheet onClose={onClose} title="Create ad" subtitle={steps[step]}>
@@ -1155,46 +1286,83 @@ function CreateAdSheet({
 
       <div className="sheet-body">
         {step === 0 ? (
-          <section className="upload-step">
-            <button type="button" className="upload-drop" onClick={() => fileInput.current?.click()}>
-              {media ? (
-                media.kind === "video" ? <video src={media.url} controls /> : <img src={media.url} alt={media.file.name} />
-              ) : (
-                <>
-                  <Upload size={28} />
-                  <strong>Upload photo or video</strong>
-                  <span>Use 9:16 vertical for Reels, TikTok, Shorts. 1:1 for feed. We auto-resize.</span>
-                </>
-              )}
+          <section className="form-step">
+            <button className="start-tile" onClick={() => setStep(1)}>
+              <Sparkles size={22} />
+              <strong>Start blank</strong>
+              <span>Upload your own media</span>
             </button>
-            <input ref={fileInput} type="file" accept="image/*,video/*" hidden onChange={pickFile} />
-            <p className="muted small">Tip: shoot once, distribute everywhere. Sart34 trims, captions, and reformats per platform.</p>
+            <span className="field-label">Or pick a template</span>
+            <div className="template-grid">
+              {templates.map((value) => (
+                <article className={`template-card ${template?.id === value.id ? "selected" : ""}`} key={value.id}>
+                  <span className="template-tag">{value.industry}</span>
+                  <strong>{value.name}</strong>
+                  <span className="template-desc">{value.description}</span>
+                  <div className="template-meta">
+                    <span>NGN {value.defaultDailyBudget.toLocaleString()} / day</span>
+                    <span>{value.defaultDurationDays}d</span>
+                  </div>
+                  <button className="filled-button compact" onClick={() => applyTemplate(value)}>Use template</button>
+                </article>
+              ))}
+            </div>
           </section>
         ) : null}
 
         {step === 1 ? (
+          <section className="upload-step">
+            <button type="button" className="upload-drop" onClick={() => fileInput.current?.click()}>
+              {previewMedia ? (
+                previewMedia.kind === "video" ? <video src={previewMedia.url} controls /> : <img src={previewMedia.url} alt="" />
+              ) : (
+                <>
+                  <Upload size={28} />
+                  <strong>Upload photo or video</strong>
+                  <span>9:16 vertical works best for Reels and TikTok</span>
+                </>
+              )}
+            </button>
+            <input ref={fileInput} type="file" accept="image/*,video/*" hidden onChange={pickFile} />
+            {creatives.length > 0 ? (
+              <>
+                <span className="field-label">Or reuse from library</span>
+                <div className="reuse-grid">
+                  {creatives.slice(0, 9).map((creative) => (
+                    <button key={creative.id} type="button" className={`reuse-tile ${pickedCreative?.id === creative.id ? "selected" : ""}`} onClick={() => { setPickedCreative(creative); setLocalMedia(null); setUploadedCreative(null); }}>
+                      {/\.(mp4|mov|webm)$/i.test(creative.fileName) ? <video src={creative.fileUrl} muted /> : <img src={creative.fileUrl} alt="" />}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
+          </section>
+        ) : null}
+
+        {step === 2 ? (
           <section className="form-step">
-            <Field label="Ad name (only you see this)"><input value={brief.name} onChange={(event) => setBrief({ ...brief, name: event.target.value })} placeholder="June launch reels" /></Field>
-            <Field label="What are you advertising?"><input value={brief.productName} onChange={(event) => setBrief({ ...brief, productName: event.target.value })} placeholder="Hair product, cleaning service, training" /></Field>
-            <Field label="Offer or hook"><input value={brief.offer} onChange={(event) => setBrief({ ...brief, offer: event.target.value })} placeholder="20% off this week, free consultation" /></Field>
-            <Field label="Tell Sart34 anything else (it writes the copy)">
-              <textarea value={brief.description} onChange={(event) => setBrief({ ...brief, description: event.target.value })} placeholder="Tone, audience, objections, proof. The more you say, the better the AI." />
+            <Field label="Ad name"><input value={brief.name} onChange={(event) => setBrief({ ...brief, name: event.target.value })} /></Field>
+            <Field label="Product or service"><input value={brief.productName} onChange={(event) => setBrief({ ...brief, productName: event.target.value })} /></Field>
+            <div className="row">
+              <Field label="Price"><input value={brief.price} onChange={(event) => setBrief({ ...brief, price: event.target.value })} placeholder="NGN" /></Field>
+              <Field label="Offer or hook"><input value={brief.offer} onChange={(event) => setBrief({ ...brief, offer: event.target.value })} /></Field>
+            </div>
+            <Field label="Anything else for the AI">
+              <textarea value={brief.description} onChange={(event) => setBrief({ ...brief, description: event.target.value })} />
             </Field>
             <span className="field-label">Goal</span>
             <div className="chip-grid">
-              {campaignGoals.map(([value, label, hint]) => (
+              {campaignGoals.map(([value, label]) => (
                 <button key={value} type="button" className={`chip ${brief.goal === value ? "active" : ""}`} onClick={() => setBrief({ ...brief, goal: value })}>
                   <strong>{label}</strong>
-                  <span>{hint}</span>
                 </button>
               ))}
             </div>
           </section>
         ) : null}
 
-        {step === 2 ? (
+        {step === 3 ? (
           <section className="form-step">
-            <p className="muted">Pick where this should run. Sart34 reformats and rewrites for each one. Disconnected platforms are still pickable, you'll be asked to link them.</p>
             <div className="platform-grid">
               {PLATFORMS.map((platform) => {
                 const connected = connectedIds.has(platform.id);
@@ -1206,11 +1374,11 @@ function CreateAdSheet({
                     <span>{platform.short}</span>
                     <span className="platform-card-tag">
                       {selected ? <BadgeCheck size={14} /> : <Plus size={14} />}
-                      {connected ? "Connected" : "Will ask to connect"}
+                      {connected ? "Connected" : "Connect required"}
                     </span>
                     {!connected ? (
                       <span className="platform-card-link" onClick={(event) => { event.stopPropagation(); onConnect(platform); }}>
-                        Connect now <ArrowRight size={12} />
+                        Connect <ArrowRight size={12} />
                       </span>
                     ) : null}
                   </button>
@@ -1220,10 +1388,10 @@ function CreateAdSheet({
           </section>
         ) : null}
 
-        {step === 3 ? (
+        {step === 4 ? (
           <section className="form-step">
-            <Field label="Locations"><input value={audience.location} onChange={(event) => setAudience({ ...audience, location: event.target.value })} placeholder="Lagos, Abuja, Port Harcourt" /></Field>
-            <Field label="Interests, behaviours, keywords"><input value={audience.interests} onChange={(event) => setAudience({ ...audience, interests: event.target.value })} placeholder="Home owners, founders, students" /></Field>
+            <Field label="Locations"><input value={audience.location} onChange={(event) => setAudience({ ...audience, location: event.target.value })} placeholder="Lagos, Abuja" /></Field>
+            <Field label="Interests / keywords"><input value={audience.interests} onChange={(event) => setAudience({ ...audience, interests: event.target.value })} /></Field>
             <div className="row">
               <Field label="Min age"><input type="number" min={13} max={64} value={audience.ageMin} onChange={(event) => setAudience({ ...audience, ageMin: Number(event.target.value) })} /></Field>
               <Field label="Max age"><input type="number" min={13} max={65} value={audience.ageMax} onChange={(event) => setAudience({ ...audience, ageMax: Number(event.target.value) })} /></Field>
@@ -1234,11 +1402,10 @@ function CreateAdSheet({
                 <button key={option} type="button" className={audience.gender === option ? "active" : ""} onClick={() => setAudience({ ...audience, gender: option })}>{option}</button>
               ))}
             </div>
-            <p className="muted small">Sart34 expands the audience automatically when delivery slows. You can tighten this later.</p>
           </section>
         ) : null}
 
-        {step === 4 ? (
+        {step === 5 ? (
           <section className="form-step">
             <Field label="Daily budget (NGN)">
               <input type="number" min={500} value={budget.daily} onChange={(event) => setBudget({ ...budget, daily: Number(event.target.value) })} />
@@ -1267,25 +1434,23 @@ function CreateAdSheet({
           </section>
         ) : null}
 
-        {step === 5 ? (
+        {step === 6 ? (
           <section className="preview-step">
-            <p className="muted">This is what each platform will show. Sart34 wrote the copy, picked the placement, and respects each platform's rules.</p>
             <div className="preview-stack">
               {selectedPlatforms.map((id) => {
                 const platform = PLATFORM_BY_ID[id];
                 if (!platform) return null;
-                return <PlatformPreview key={id} platform={platform} media={media} brief={brief} budget={budget} audience={audience} />;
+                return <PlatformPreview key={id} platform={platform} media={previewMedia} brief={brief} budget={budget} audience={audience} />;
               })}
               {selectedPlatforms.length === 0 ? <p className="muted">No platforms selected.</p> : null}
             </div>
           </section>
         ) : null}
 
-        {step === 6 ? (
+        {step === 7 ? (
           <section className="approve-step">
             <Sparkles size={28} />
             <h3>Ready to launch on {selectedPlatforms.length} platform{selectedPlatforms.length === 1 ? "" : "s"}</h3>
-            <p>Sart34 will run a final policy review, then submit to each platform. If any of them need more info, we'll show you exactly what's needed in your inbox.</p>
             <div className="approve-summary">
               <div><span>Goal</span><strong>{campaignGoals.find(([value]) => value === brief.goal)?.[1] ?? "Lead generation"}</strong></div>
               <div><span>Audience</span><strong>{audience.location || "Auto"} · {audience.ageMin}-{audience.ageMax}</strong></div>
@@ -1302,7 +1467,7 @@ function CreateAdSheet({
           <button type="button" className="filled-button" onClick={next}>Continue <ArrowRight size={16} /></button>
         ) : (
           <button type="button" className="filled-button success" onClick={() => void submit()} disabled={submitting}>
-            {submitting ? <Loader2 className="spin" size={18} /> : <Send size={18} />} Approve & launch
+            {submitting ? <Loader2 className="spin" size={18} /> : <Send size={18} />} Approve and submit
           </button>
         )}
       </footer>
@@ -1318,7 +1483,7 @@ function PlatformPreview({ platform, media, brief, budget, audience }: {
   audience: { location: string };
 }) {
   const headline = brief.offer || brief.productName || "Your hook here";
-  const body = brief.description || "Sart34 will write the body in your tone of voice.";
+  const body = brief.description || "Sart34 will write the body.";
 
   if (platform.id === "META") {
     return (
@@ -1328,17 +1493,14 @@ function PlatformPreview({ platform, media, brief, budget, audience }: {
           <MoreHorizontal size={16} />
         </div>
         <div className="preview-media">
-          {media ? (media.kind === "video" ? <video src={media.url} loop muted autoPlay /> : <img src={media.url} alt="" />) : <PreviewPlaceholder />}
-        </div>
-        <div className="preview-actions">
-          <Heart size={20} /> <MessageCircle size={20} /> <Send size={20} /> <Bookmark size={20} className="right" />
+          {media ? (media.kind === "video" ? <video src={media.url} loop muted autoPlay playsInline /> : <img src={media.url} alt="" />) : <PreviewPlaceholder />}
         </div>
         <div className="preview-body">
           <strong>your.brand</strong> {headline}
           <p>{body}</p>
           <button className="preview-cta">{budget.callToAction}</button>
         </div>
-        <span className="preview-foot">Instagram Reels · Facebook Feed · Stories</span>
+        <span className="preview-foot">Instagram Feed · Reels · Stories · Facebook</span>
       </div>
     );
   }
@@ -1357,7 +1519,7 @@ function PlatformPreview({ platform, media, brief, budget, audience }: {
           <p>{body.slice(0, 90)}</p>
           <span className="g-sitelinks">More info · Pricing · Contact · Reviews</span>
         </div>
-        <span className="preview-foot">Search · YouTube · Display · Discover · Maps</span>
+        <span className="preview-foot">Search · YouTube · Display · Maps</span>
       </div>
     );
   }
@@ -1366,103 +1528,17 @@ function PlatformPreview({ platform, media, brief, budget, audience }: {
     return (
       <div className="preview tiktok-preview">
         <div className="tt-frame">
-          {media ? (media.kind === "video" ? <video src={media.url} loop muted autoPlay /> : <img src={media.url} alt="" />) : <PreviewPlaceholder />}
+          {media ? (media.kind === "video" ? <video src={media.url} loop muted autoPlay playsInline /> : <img src={media.url} alt="" />) : <PreviewPlaceholder />}
           <div className="tt-overlay">
             <div className="tt-text">
               <strong>@your.brand · Sponsored</strong>
               <p>{headline}</p>
               <span className="tt-music">♪ original sound</span>
             </div>
-            <div className="tt-rail">
-              <span><Heart size={20} /></span>
-              <span><MessageCircle size={20} /></span>
-              <span><Share2 size={20} /></span>
-            </div>
           </div>
           <button className="preview-cta tt-cta">{budget.callToAction}</button>
         </div>
-        <span className="preview-foot">For You · Spark Ads · 9:16 vertical</span>
-      </div>
-    );
-  }
-
-  if (platform.id === "LINKEDIN") {
-    return (
-      <div className="preview linkedin-preview">
-        <div className="li-head">
-          <div className="li-avatar">in</div>
-          <div><strong>Your Company</strong><span>Promoted · {audience.location || "Global"}</span></div>
-        </div>
-        <p className="li-body">{body}</p>
-        <div className="li-media">{media ? (media.kind === "video" ? <video src={media.url} controls /> : <img src={media.url} alt="" />) : <PreviewPlaceholder />}</div>
-        <div className="li-card">
-          <strong>{headline}</strong>
-          <span>your-business.com</span>
-          <button className="preview-cta li-cta">{budget.callToAction}</button>
-        </div>
-        <span className="preview-foot">Sponsored Content · Lead Gen Form</span>
-      </div>
-    );
-  }
-
-  if (platform.id === "X") {
-    return (
-      <div className="preview x-preview">
-        <div className="x-head">
-          <div className="x-avatar">𝕏</div>
-          <div><strong>Your Brand</strong> <span>@yourbrand · Promoted</span></div>
-        </div>
-        <p>{body.slice(0, 240)}</p>
-        <div className="x-media">{media ? (media.kind === "video" ? <video src={media.url} controls /> : <img src={media.url} alt="" />) : <PreviewPlaceholder />}</div>
-        <div className="x-actions"><MessageCircle size={16} /> <RefreshCw size={16} /> <Heart size={16} /> <Eye size={16} /></div>
-        <span className="preview-foot">Promoted post on X timeline</span>
-      </div>
-    );
-  }
-
-  if (platform.id === "YOUTUBE") {
-    return (
-      <div className="preview youtube-preview">
-        <div className="yt-frame">
-          {media ? (media.kind === "video" ? <video src={media.url} controls /> : <img src={media.url} alt="" />) : <PreviewPlaceholder />}
-          <span className="yt-skip">Skip ad in 5s</span>
-        </div>
-        <div className="yt-meta">
-          <strong>{headline}</strong>
-          <span>your-business.com · {audience.location || "Global"}</span>
-        </div>
-        <span className="preview-foot">YouTube · Skippable in-stream · Bumper · Shorts</span>
-      </div>
-    );
-  }
-
-  if (platform.id === "PINTEREST") {
-    return (
-      <div className="preview pinterest-preview">
-        <div className="pi-pin">
-          {media ? <img src={media.url} alt="" /> : <PreviewPlaceholder />}
-          <div className="pi-meta">
-            <strong>{headline}</strong>
-            <span>Promoted · your.brand</span>
-          </div>
-        </div>
-        <span className="preview-foot">Idea Pin · Promoted Pin · Shopping</span>
-      </div>
-    );
-  }
-
-  if (platform.id === "SNAPCHAT") {
-    return (
-      <div className="preview snap-preview">
-        <div className="sn-frame">
-          {media ? (media.kind === "video" ? <video src={media.url} loop muted autoPlay /> : <img src={media.url} alt="" />) : <PreviewPlaceholder />}
-          <div className="sn-overlay">
-            <strong>your.brand</strong>
-            <p>{headline}</p>
-            <button className="preview-cta sn-cta">{budget.callToAction}</button>
-          </div>
-        </div>
-        <span className="preview-foot">Snap Ads · Story Ads · 9:16</span>
+        <span className="preview-foot">For You · Spark Ads · 9:16</span>
       </div>
     );
   }
@@ -1485,15 +1561,14 @@ function PlatformPreview({ platform, media, brief, budget, audience }: {
 }
 
 function PreviewPlaceholder() {
-  return <div className="preview-placeholder"><ImagePlus size={26} /><span>Your media goes here</span></div>;
+  return <div className="preview-placeholder"><ImagePlus size={26} /></div>;
 }
 
-function ConnectAccountSheet({ platform, workspace, accounts, onClose, onConnected, notify }: {
+function ConnectAccountSheet({ platform, workspace, accounts, onClose, notify }: {
   platform: PlatformDef;
   workspace: Workspace;
   accounts: IntegrationAccount[];
   onClose: () => void;
-  onConnected: () => void;
   notify: (toast: Toast) => void;
 }) {
   const account = accounts.find((entry) => entry.provider === platform.id);
@@ -1503,25 +1578,21 @@ function ConnectAccountSheet({ platform, workspace, accounts, onClose, onConnect
   async function connect() {
     setBusy(true);
     try {
-      if (platform.id === "META") {
-        const result = await api.metaConnect(workspace.id);
-        if (result.authorizationUrl) {
-          window.location.href = result.authorizationUrl;
-          return;
-        }
-        notify({ type: "info", message: result.message });
-      } else {
-        notify({ type: "info", message: `${platform.name} OAuth opens here once Sart34 receives platform approval. Backend handles the token exchange.` });
+      const result = await platform.connect(workspace.id);
+      if (result.authorizationUrl) {
+        window.location.href = result.authorizationUrl;
+        return;
       }
+      notify({ type: "info", message: result.message });
     } catch (error) {
-      notify({ type: "error", message: error instanceof Error ? error.message : `Could not start ${platform.name} flow` });
+      notify({ type: "error", message: error instanceof Error ? error.message : "Could not start connection" });
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <FullSheet onClose={onClose} title={platform.name} subtitle={platform.tagline}>
+    <FullSheet onClose={onClose} title={platform.name} subtitle={platform.short}>
       <div className="sheet-body">
         <section className="connect-hero" style={{ background: `linear-gradient(135deg, ${platform.accent}, ${platform.accent}cc)` }}>
           <span className="connect-hero-glyph">{platform.glyph}</span>
@@ -1533,17 +1604,16 @@ function ConnectAccountSheet({ platform, workspace, accounts, onClose, onConnect
         </section>
 
         <section className="card">
-          <header className="card-head"><div><strong>What Sart34 will do</strong><span>You stay in control. Approve every launch.</span></div></header>
+          <header className="card-head"><div><strong>Surfaces</strong></div></header>
           <ul className="check-list">
-            <li><BadgeCheck size={16} /> Run ads on {platform.surfaces.join(", ")}</li>
-            <li><BadgeCheck size={16} /> Auto-format your creative for {platform.formats.join(", ")}</li>
-            <li><BadgeCheck size={16} /> Pull live results back into Sart34 every 30 minutes</li>
-            <li><BadgeCheck size={16} /> Pause or stop your campaign with one tap from this app</li>
+            {platform.surfaces.map((surface) => (
+              <li key={surface}><BadgeCheck size={16} /> {surface}</li>
+            ))}
           </ul>
         </section>
 
         <section className="card">
-          <header className="card-head"><div><strong>What we'll need</strong><span>{platform.budgetHint}</span></div></header>
+          <header className="card-head"><div><strong>What we'll need</strong></div></header>
           <ul className="req-list">
             {platform.requirements.map((requirement) => (
               <li key={requirement.key}>
@@ -1556,24 +1626,266 @@ function ConnectAccountSheet({ platform, workspace, accounts, onClose, onConnect
             ))}
           </ul>
         </section>
-
-        {connected ? (
-          <section className="card connected-card">
-            <header className="card-head">
-              <div><strong>Connected as {account?.accountName ?? "—"}</strong><span>Account ID hidden for security</span></div>
-              <BadgeCheck size={20} />
-            </header>
-            <button className="ghost-button danger" onClick={onClose}><Unplug size={16} /> Disconnect</button>
-          </section>
-        ) : null}
       </div>
 
       <footer className="sheet-footer">
         <button className="ghost-button" onClick={onClose}>Close</button>
-        <button className="filled-button" onClick={() => void connect()} disabled={busy} style={{ background: platform.accent, color: "#fff", boxShadow: `0 12px 24px ${platform.accent}40` }}>
+        <button className="filled-button" onClick={() => void connect()} disabled={busy} style={{ background: platform.accent, color: "#fff" }}>
           {busy ? <Loader2 className="spin" size={18} /> : <Plus size={18} />}
-          {connected ? "Re-link account" : `Connect ${platform.name}`}
+          {connected ? "Re-link" : `Connect ${platform.name}`}
         </button>
+      </footer>
+    </FullSheet>
+  );
+}
+
+function CampaignDetailSheet({ campaign, onClose, onChange, notify }: {
+  campaign: Campaign;
+  onClose: () => void;
+  onChange: () => void | Promise<void>;
+  notify: (toast: Toast) => void;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [optimization, setOptimization] = useState<Record<string, string[]> | null>(null);
+  const [metrics, setMetrics] = useState<Array<{ date: string; impressions: number; clicks: number; leads: number; spend: number }>>([]);
+  const [optimizing, setOptimizing] = useState(false);
+  const platforms = campaignPlatforms(campaign);
+  const goal = campaignGoals.find(([value]) => value === campaign.goal);
+  const live = campaign.status === "ACTIVE";
+
+  useEffect(() => {
+    api.campaignMetrics(campaign.id).then((rows) => setMetrics(rows.map((row) => ({ ...row, spend: Number(row.spend) })))).catch(() => undefined);
+  }, [campaign.id]);
+
+  async function run(label: string, action: () => Promise<unknown>) {
+    setBusy(label);
+    try {
+      await action();
+      notify({ type: "success", message: `${label} done` });
+      await onChange();
+    } catch (error) {
+      notify({ type: "error", message: error instanceof Error ? error.message : `${label} failed` });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function fetchOptimization() {
+    setOptimizing(true);
+    try {
+      const result = await api.optimizeCampaign(campaign.id);
+      setOptimization(result);
+    } catch (error) {
+      notify({ type: "error", message: error instanceof Error ? error.message : "Optimization failed" });
+    } finally {
+      setOptimizing(false);
+    }
+  }
+
+  const totals = metrics.reduce((sum, metric) => ({
+    impressions: sum.impressions + metric.impressions,
+    clicks: sum.clicks + metric.clicks,
+    leads: sum.leads + metric.leads,
+    spend: sum.spend + metric.spend
+  }), { impressions: 0, clicks: 0, leads: 0, spend: 0 });
+
+  return (
+    <FullSheet onClose={onClose} title={campaign.name} subtitle={goal?.[1] ?? campaign.goal}>
+      <div className="sheet-body">
+        <section className="card">
+          <header className="card-head">
+            <div className="card-head-left">
+              {platforms.map((platform) => (
+                <span key={platform.id} className="platform-pill compact" style={{ ['--accent' as never]: platform.accent }}>
+                  <span className="platform-pill-glyph" style={{ background: platform.accent }}>{platform.glyph}</span>
+                  {platform.name}
+                </span>
+              ))}
+            </div>
+            <StatusPill value={campaign.status} compact />
+          </header>
+          <div className="quick-row">
+            <button className="ghost-button" disabled={busy !== null} onClick={() => run("AI generation", () => api.generateCampaign(campaign.id))}>{busy === "AI generation" ? <Loader2 className="spin" size={16} /> : <Sparkles size={16} />} Regenerate</button>
+            <button className="ghost-button" disabled={busy !== null} onClick={() => run("Policy review", () => api.reviewCampaign(campaign.id))}>{busy === "Policy review" ? <Loader2 className="spin" size={16} /> : <Shield size={16} />} Re-check policy</button>
+            {campaign.status === "READY_TO_LAUNCH" ? (
+              <button className="filled-button compact" disabled={busy !== null} onClick={() => run("Approval", () => api.approveCampaign(campaign.id))}>{busy === "Approval" ? <Loader2 className="spin" size={16} /> : <BadgeCheck size={16} />} Approve</button>
+            ) : null}
+            {campaign.status === "READY_TO_LAUNCH" || campaign.status === "PAUSED" ? (
+              <button className="filled-button compact success" disabled={busy !== null} onClick={() => run("Launch", () => api.launchCampaign(campaign.id))}>{busy === "Launch" ? <Loader2 className="spin" size={16} /> : <Send size={16} />} Launch</button>
+            ) : null}
+            {live ? (
+              <button className="ghost-button" disabled={busy !== null} onClick={() => run("Pause", () => api.pauseCampaign(campaign.id))}>{busy === "Pause" ? <Loader2 className="spin" size={16} /> : <Pause size={16} />} Pause</button>
+            ) : null}
+            {campaign.status === "PAUSED" ? (
+              <button className="ghost-button" disabled={busy !== null} onClick={() => run("Resume", () => api.resumeCampaign(campaign.id))}>{busy === "Resume" ? <Loader2 className="spin" size={16} /> : <Play size={16} />} Resume</button>
+            ) : null}
+          </div>
+        </section>
+
+        <section className="card">
+          <header className="card-head"><div><strong>Performance</strong><span>Last {metrics.length} day{metrics.length === 1 ? "" : "s"}</span></div></header>
+          <div className="kpi-grid four">
+            <KPI label="Impressions" value={totals.impressions.toLocaleString()} />
+            <KPI label="Clicks" value={totals.clicks.toLocaleString()} />
+            <KPI label="Leads" value={totals.leads.toLocaleString()} accent="success" />
+            <KPI label="Spend" value={`NGN ${totals.spend.toLocaleString()}`} />
+          </div>
+          {metrics.length > 0 ? (
+            <div className="spark">
+              {metrics.slice().reverse().map((metric, index) => {
+                const max = Math.max(...metrics.map((row) => row.impressions), 1);
+                return <span key={index} className="spark-bar" style={{ height: `${Math.max(6, (metric.impressions / max) * 100)}%` }} title={`${metric.date}: ${metric.impressions} impressions`} />;
+              })}
+            </div>
+          ) : <p className="muted small">Performance starts flowing in once the ad goes live.</p>}
+        </section>
+
+        <section className="card">
+          <header className="card-head">
+            <div><strong>AI optimization</strong></div>
+            <button className="filled-button compact" onClick={() => void fetchOptimization()} disabled={optimizing}>
+              {optimizing ? <Loader2 className="spin" size={16} /> : <Sparkles size={16} />} {optimization ? "Regenerate" : "Get suggestions"}
+            </button>
+          </header>
+          {optimization ? (
+            <ul className="optim-list">
+              {Object.entries(optimization).map(([section, suggestions]) => (
+                <li key={section}>
+                  <strong>{section.replaceAll("_", " ")}</strong>
+                  <ul>
+                    {(Array.isArray(suggestions) ? suggestions : [String(suggestions)]).map((item, index) => (
+                      <li key={index}>{item}</li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
+          ) : <p className="muted small">Tap to generate suggestions on copy, creative, audience, budget, and follow-up.</p>}
+        </section>
+      </div>
+
+      <footer className="sheet-footer">
+        <button className="ghost-button" onClick={onClose}>Close</button>
+        <button className="ghost-button danger" disabled={busy !== null} onClick={() => run("Archive", () => api.archiveCampaign(campaign.id)).then(onClose)}><Trash2 size={16} /> Archive</button>
+      </footer>
+    </FullSheet>
+  );
+}
+
+function LeadDetailSheet({ lead, onClose, onChange, notify }: {
+  lead: Lead;
+  onClose: () => void;
+  onChange: () => void | Promise<void>;
+  notify: (toast: Toast) => void;
+}) {
+  const [channel, setChannel] = useState<"WHATSAPP" | "SMS" | "EMAIL" | "CALL">("WHATSAPP");
+  const [generated, setGenerated] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const [note, setNote] = useState("");
+
+  async function generate() {
+    setGenerating(true);
+    try {
+      const result = await api.generateLeadFollowUp(lead.id, channel);
+      setGenerated(result.message ?? null);
+    } catch (error) {
+      notify({ type: "error", message: error instanceof Error ? error.message : "Could not generate follow-up" });
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  async function moveStage() {
+    try {
+      await api.updateLead(lead.id, { status: nextStage(lead.status) });
+      notify({ type: "success", message: "Lead moved" });
+      await onChange();
+      onClose();
+    } catch (error) {
+      notify({ type: "error", message: error instanceof Error ? error.message : "Could not move lead" });
+    }
+  }
+
+  async function saveNote() {
+    if (!note.trim()) return;
+    try {
+      await api.addLeadNote(lead.id, note.trim());
+      setNote("");
+      notify({ type: "success", message: "Note saved" });
+    } catch (error) {
+      notify({ type: "error", message: error instanceof Error ? error.message : "Could not save note" });
+    }
+  }
+
+  function copyMessage() {
+    if (!generated) return;
+    void navigator.clipboard.writeText(generated);
+    notify({ type: "success", message: "Copied" });
+  }
+
+  function openChannel() {
+    const text = generated ? encodeURIComponent(generated) : "";
+    if (channel === "WHATSAPP" && lead.whatsappNumber) {
+      window.open(`https://wa.me/${lead.whatsappNumber.replace(/[^0-9]/g, "")}?text=${text}`, "_blank");
+    } else if (channel === "SMS" && lead.phone) {
+      window.location.href = `sms:${lead.phone}?body=${text}`;
+    } else if (channel === "EMAIL" && lead.email) {
+      window.location.href = `mailto:${lead.email}?body=${text}`;
+    } else if (channel === "CALL" && (lead.phone || lead.whatsappNumber)) {
+      window.location.href = `tel:${lead.phone ?? lead.whatsappNumber}`;
+    }
+  }
+
+  return (
+    <FullSheet onClose={onClose} title={lead.fullName} subtitle={lead.interest ?? "Lead"}>
+      <div className="sheet-body">
+        <section className="card">
+          <header className="card-head">
+            <div><strong>Contact</strong><span>{timeAgo(lead.createdAt)}</span></div>
+            <StatusPill value={lead.status} compact />
+          </header>
+          <ul className="contact-list">
+            {lead.whatsappNumber ? <li><MessageCircle size={16} /> {lead.whatsappNumber}</li> : null}
+            {lead.phone ? <li><Phone size={16} /> {lead.phone}</li> : null}
+            {lead.email ? <li><Mail size={16} /> {lead.email}</li> : null}
+          </ul>
+        </section>
+
+        <section className="card">
+          <header className="card-head"><div><strong>AI follow-up</strong></div></header>
+          <div className="segmented">
+            {(["WHATSAPP", "SMS", "EMAIL", "CALL"] as const).map((value) => (
+              <button key={value} className={channel === value ? "active" : ""} onClick={() => setChannel(value)}>{value === "WHATSAPP" ? "WhatsApp" : value === "EMAIL" ? "Email" : value === "SMS" ? "SMS" : "Call"}</button>
+            ))}
+          </div>
+          <div className="follow-actions">
+            <button className="filled-button compact" onClick={() => void generate()} disabled={generating}>
+              {generating ? <Loader2 className="spin" size={16} /> : <Sparkles size={16} />} Generate
+            </button>
+            {generated ? (
+              <>
+                <button className="ghost-button" onClick={copyMessage}>Copy</button>
+                <button className="filled-button compact success" onClick={openChannel}><Send size={16} /> Send</button>
+              </>
+            ) : null}
+          </div>
+          {generated ? <pre className="follow-message">{generated}</pre> : null}
+        </section>
+
+        <section className="card">
+          <header className="card-head"><div><strong>Notes</strong></div></header>
+          <Field label="Add a note">
+            <textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Spoke with them on WhatsApp at 4pm" />
+          </Field>
+          <div className="row-end">
+            <button className="ghost-button" onClick={() => void saveNote()} disabled={!note.trim()}>Save note</button>
+          </div>
+        </section>
+      </div>
+
+      <footer className="sheet-footer">
+        <button className="ghost-button" onClick={onClose}>Close</button>
+        <button className="filled-button" onClick={() => void moveStage()}>Move to {nextStage(lead.status).replaceAll("_", " ").toLowerCase()} <ArrowRight size={16} /></button>
       </footer>
     </FullSheet>
   );
@@ -1618,7 +1930,6 @@ function IssueFixSheet({ campaign, onClose, onResolved, notify }: { campaign: Ca
                 </span>
               </div>
             </header>
-            <p className="muted small">{platform.name} typically asks for these when a launch fails. Fill the ones that apply, Sart34 will resubmit.</p>
             <div className="form-stack">
               {platform.requirements.map((requirement) => (
                 <Field key={requirement.key} label={requirement.label}>
@@ -1637,7 +1948,7 @@ function IssueFixSheet({ campaign, onClose, onResolved, notify }: { campaign: Ca
       <footer className="sheet-footer">
         <button className="ghost-button" onClick={onClose}>Close</button>
         <button className="filled-button success" onClick={() => void retry()} disabled={busy}>
-          {busy ? <Loader2 className="spin" size={18} /> : <Send size={18} />} Resubmit launch
+          {busy ? <Loader2 className="spin" size={18} /> : <Send size={18} />} Resubmit
         </button>
       </footer>
     </FullSheet>
@@ -1668,7 +1979,7 @@ function FeedSkeleton() {
   return (
     <div className="feed">
       <div className="skeleton hero" />
-      <div className="skeleton-rail">{Array.from({ length: 5 }).map((_, index) => <div key={index} className="skeleton story" />)}</div>
+      <div className="skeleton-rail">{Array.from({ length: 4 }).map((_, index) => <div key={index} className="skeleton story" />)}</div>
       <div className="skeleton metric-row">{Array.from({ length: 4 }).map((_, index) => <div key={index} className="skeleton chip" />)}</div>
       <div className="skeleton card" />
       <div className="skeleton card" />
@@ -1681,7 +1992,6 @@ function SplashScreen() {
     <div className="splash">
       <Brand large />
       <Loader2 className="spin" size={22} />
-      <span>Loading your studio…</span>
     </div>
   );
 }
@@ -1689,16 +1999,16 @@ function SplashScreen() {
 function StatusPill({ value, compact }: { value: string; compact?: boolean }) {
   const map: Record<string, { label: string; tone: string }> = {
     DRAFT: { label: "Draft", tone: "muted" },
+    PENDING_REVIEW: { label: "Reviewing", tone: "info" },
     READY_TO_LAUNCH: { label: "Ready", tone: "info" },
     SUBMITTED: { label: "Submitted", tone: "info" },
     ACTIVE: { label: "Live", tone: "success" },
     PAUSED: { label: "Paused", tone: "muted" },
-    POLICY_FLAGGED: { label: "Action needed", tone: "warn" },
-    NEEDS_INPUT: { label: "Action needed", tone: "warn" },
     REJECTED: { label: "Rejected", tone: "danger" },
     FAILED: { label: "Failed", tone: "danger" },
     APPROVED: { label: "Approved", tone: "success" },
-    COMPLETED: { label: "Completed", tone: "success" }
+    COMPLETED: { label: "Completed", tone: "success" },
+    ARCHIVED: { label: "Archived", tone: "muted" }
   };
   const entry = map[value] ?? { label: value.replaceAll("_", " ").toLowerCase(), tone: "muted" };
   return <span className={`status ${entry.tone} ${compact ? "compact" : ""}`}>{entry.label}</span>;
@@ -1757,7 +2067,7 @@ function AdminConsole({ user, logout, notify }: { user: { firstName: string; ema
               <KPI label="Review queue" value={String(flagged.length)} accent="warn" />
             </div>
             <section className="card">
-              <header className="card-head"><div><strong>Recent ads</strong><span>{campaigns.length}</span></div></header>
+              <header className="card-head"><div><strong>Recent ads</strong></div></header>
               <ul className="mini-list">
                 {campaigns.slice(0, 8).map((campaign) => (
                   <li className="mini-row" key={campaign.id}><strong>{campaign.name}</strong><StatusPill value={campaign.status} compact /></li>
@@ -1831,7 +2141,7 @@ function AdminConsole({ user, logout, notify }: { user: { firstName: string; ema
 }
 
 function tabLabel(tab: BusinessTab): string {
-  return ({ home: "Home", discover: "Discover", inbox: "Inbox", profile: "Profile" } as const)[tab];
+  return ({ home: "Home", library: "Library", inbox: "Inbox", profile: "Profile" } as const)[tab];
 }
 
 function adminLabel(tab: AdminTab): string {
@@ -1856,7 +2166,8 @@ function timeAgo(value: string): string {
 }
 
 function campaignPlatforms(campaign: Campaign): PlatformDef[] {
-  const meta = (campaign.aiStrategyJson as { targetPlatforms?: string[] } | undefined)?.targetPlatforms;
+  const meta = (campaign.aiStrategyJson as { targetPlatforms?: string[] } | undefined)?.targetPlatforms
+    ?? ((campaign as { productDetails?: { targetPlatforms?: string[] } }).productDetails?.targetPlatforms);
   const ids = meta && meta.length ? meta : [campaign.platform];
   return ids
     .map((id) => PLATFORM_BY_ID[id])
@@ -1866,8 +2177,7 @@ function campaignPlatforms(campaign: Campaign): PlatformDef[] {
 function summarizeIssue(campaign: Campaign): string {
   const review = campaign.policyReviews?.[0];
   if (review?.flaggedReasons?.[0]) return review.flaggedReasons[0];
-  if (campaign.status === "REJECTED") return "A platform rejected this ad. Tap fix to update and resubmit.";
-  if (campaign.status === "FAILED") return "The launch failed. Provide the missing details and Sart34 will retry.";
-  if (campaign.status === "POLICY_FLAGGED") return "Sart34 flagged this for a quick policy review.";
-  return "Action required to continue this launch.";
+  if (campaign.status === "REJECTED") return "Platform rejected this ad. Update and resubmit.";
+  if (campaign.status === "FAILED") return "Launch failed. Provide the missing details and Sart34 will retry.";
+  return "Action required to continue.";
 }

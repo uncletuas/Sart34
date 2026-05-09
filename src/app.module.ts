@@ -15,6 +15,7 @@ import { IntegrationsModule } from "./modules/integrations/integrations.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { PrismaModule } from "./modules/prisma/prisma.module";
 import { ReportingModule } from "./modules/reporting/reporting.module";
+import { TemplatesModule } from "./modules/templates/templates.module";
 import { WalletModule } from "./modules/wallet/wallet.module";
 import { WorkspacesModule } from "./modules/workspaces/workspaces.module";
 import { validateConfig } from "./shared/config/validate-config";
@@ -47,6 +48,7 @@ const queuesEnabled = process.env.DISABLE_QUEUES !== "true";
     CrmModule,
     WalletModule,
     ReportingModule,
+    TemplatesModule,
     AdminModule,
     NotificationsModule
   ],

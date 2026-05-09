@@ -173,6 +173,119 @@ export class ApiClient {
     });
   }
 
+  googleConnect(workspaceId: string) {
+    return this.request<{ authorizationUrl: string | null; message: string }>("/integrations/google/connect", {
+      method: "POST",
+      body: JSON.stringify({ workspaceId })
+    });
+  }
+
+  tiktokConnect(workspaceId: string) {
+    return this.request<{ authorizationUrl: string | null; message: string }>("/integrations/tiktok/connect", {
+      method: "POST",
+      body: JSON.stringify({ workspaceId })
+    });
+  }
+
+  whatsappConnect(workspaceId: string) {
+    return this.request<{ authorizationUrl: string | null; message: string }>("/integrations/whatsapp/connect", {
+      method: "POST",
+      body: JSON.stringify({ workspaceId })
+    });
+  }
+
+  removeIntegration(integrationId: string) {
+    return this.request<{ success: boolean }>(`/integrations/${integrationId}`, { method: "DELETE" });
+  }
+
+  syncIntegration(integrationId: string) {
+    return this.request<unknown>(`/integrations/${integrationId}/sync`, { method: "POST" });
+  }
+
+  templates() {
+    return this.request<Array<{
+      id: string;
+      industry: string;
+      name: string;
+      goal: string;
+      description: string;
+      defaultDurationDays: number;
+      defaultDailyBudget: number;
+      callToAction: string;
+      audienceHints: string;
+      copyExamples: string[];
+      recommendedPlatforms: string[];
+    }>>("/templates");
+  }
+
+  uploadCreative(file: File, workspaceId: string, campaignId?: string) {
+    const form = new FormData();
+    form.append("file", file);
+    const query = new URLSearchParams({ workspaceId });
+    if (campaignId) query.set("campaignId", campaignId);
+    return this.request<Creative & { workspaceId: string }>(`/creatives/upload?${query.toString()}`, {
+      method: "POST",
+      body: form
+    });
+  }
+
+  creatives(workspaceId: string) {
+    return this.request<Array<Creative & { workspaceId: string; createdAt: string }>>(`/creatives?workspaceId=${workspaceId}`);
+  }
+
+  deleteCreative(id: string) {
+    return this.request<{ success: boolean }>(`/creatives/${id}`, { method: "DELETE" });
+  }
+
+  attachCreatives(campaignId: string, creativeIds: string[]) {
+    return this.request<unknown>(`/campaigns/${campaignId}/creatives`, {
+      method: "POST",
+      body: JSON.stringify({ creativeIds })
+    });
+  }
+
+  campaignMetrics(campaignId: string) {
+    return this.request<Array<{ id: string; date: string; impressions: number; clicks: number; leads: number; spend: number; reach: number; costPerLead: number; conversions: number }>>(`/campaigns/${campaignId}/metrics`);
+  }
+
+  campaign(campaignId: string) {
+    return this.request<Campaign & { copies?: Array<{ id: string; primaryText: string; headline?: string; description?: string; cta?: string }>; leadQuestions?: Array<{ id: string; question: string }>; metrics?: Array<{ date: string; impressions: number; clicks: number; leads: number; spend: number }> }>(`/campaigns/${campaignId}`);
+  }
+
+  pauseCampaign(id: string) { return this.request<unknown>(`/campaigns/${id}/pause`, { method: "POST" }); }
+  resumeCampaign(id: string) { return this.request<unknown>(`/campaigns/${id}/resume`, { method: "POST" }); }
+  archiveCampaign(id: string) { return this.request<unknown>(`/campaigns/${id}`, { method: "DELETE" }); }
+  optimizeCampaign(id: string) { return this.request<Record<string, string[]>>(`/campaigns/${id}/optimize`, { method: "POST" }); }
+
+  generateLeadFollowUp(leadId: string, channel: "WHATSAPP" | "SMS" | "EMAIL" | "CALL") {
+    return this.request<{ message: string; suggested_next_action?: string; temperature?: string }>(`/leads/${leadId}/generate-follow-up`, {
+      method: "POST",
+      body: JSON.stringify({ channel })
+    });
+  }
+
+  addLeadNote(leadId: string, note: string) {
+    return this.request<unknown>(`/leads/${leadId}/notes`, {
+      method: "POST",
+      body: JSON.stringify({ note })
+    });
+  }
+
+  workspaceDetail(id: string) {
+    return this.request<Workspace & { members: Array<{ id: string; role: string; user: { id: string; firstName: string; lastName: string; email: string } }> }>(`/workspaces/${id}`);
+  }
+
+  inviteMember(workspaceId: string, email: string, role: string = "MARKETING_MANAGER") {
+    return this.request<unknown>(`/workspaces/${workspaceId}/invitations`, {
+      method: "POST",
+      body: JSON.stringify({ email, role })
+    });
+  }
+
+  walletTransactions(workspaceId: string) {
+    return this.request<Array<{ id: string; amount: number; reason: string; createdAt: string; type: string }>>(`/wallet/transactions?workspaceId=${workspaceId}`);
+  }
+
   adminUsers() {
     return this.request<Array<{ id: string; firstName: string; lastName: string; email: string; role: string; isActive: boolean; createdAt: string }>>("/admin/users");
   }

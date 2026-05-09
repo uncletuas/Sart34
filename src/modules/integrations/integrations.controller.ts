@@ -22,6 +22,21 @@ export class IntegrationsController {
     return this.integrations.metaConnect(user, dto.workspaceId);
   }
 
+  @Post("google/connect")
+  googleConnect(@CurrentUser() user: AuthUser, @Body() dto: MetaConnectDto) {
+    return this.integrations.googleConnect(user, dto.workspaceId);
+  }
+
+  @Post("tiktok/connect")
+  tiktokConnect(@CurrentUser() user: AuthUser, @Body() dto: MetaConnectDto) {
+    return this.integrations.tiktokConnect(user, dto.workspaceId);
+  }
+
+  @Post("whatsapp/connect")
+  whatsappConnect(@CurrentUser() user: AuthUser, @Body() dto: MetaConnectDto) {
+    return this.integrations.whatsappConnect(user, dto.workspaceId);
+  }
+
   @Public()
   @Post("meta/callback")
   metaCallback(@Body() dto: MetaCallbackDto) {

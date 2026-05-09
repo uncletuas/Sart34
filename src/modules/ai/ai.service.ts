@@ -75,6 +75,16 @@ export class AiService {
     return output;
   }
 
+  async generateOptimization(user: AuthUser, workspaceId: string, campaignContext: Record<string, unknown>) {
+    await this.workspaces.assertMembership(user.sub, user.role, workspaceId);
+    const output = await this.structuredJson("optimization", {
+      instruction:
+        "Review this campaign and suggest concrete improvements. Return JSON with sections: copy, creative, audience, budget, follow_up. Each section is an array of short, actionable suggestions.",
+      campaignContext
+    });
+    return output;
+  }
+
   scanPolicy(content: unknown): { level: PolicyRiskLevel; warnings: string[]; requiresHumanReview: boolean } {
     const text = JSON.stringify(content);
     const warnings = BLOCKED_PATTERNS.filter((pattern) => pattern.test(text)).map((pattern) =>
@@ -102,6 +112,15 @@ export class AiService {
   }
 
   private mockOutput(type: string, payload: Record<string, unknown>) {
+    if (type === "optimization") {
+      return {
+        copy: ["Lead with a stronger 3 word hook", "Add a price anchor to set expectations"],
+        creative: ["Test a 9:16 vertical version for Reels and TikTok", "Try a UGC-style talking head against the polished cut"],
+        audience: ["Narrow age to 25 to 45 if cost per lead is rising", "Test a 1% lookalike of recent leads"],
+        budget: ["Hold daily spend for 4 days before optimizing", "Shift 30 percent of budget to the best ad set after day 5"],
+        follow_up: ["Reply within 5 minutes to lift conversion 2x", "Send a follow-up the next morning if no response in 24 hours"]
+      };
+    }
     if (type === "follow-up-message") {
       return {
         message: "Thanks for your interest. Would you like more details or should we schedule a quick follow-up?",
