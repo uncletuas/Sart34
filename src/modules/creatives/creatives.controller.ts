@@ -1,10 +1,12 @@
 import { Controller, Delete, Get, Param, Post, Query, Res, UploadedFile, UseInterceptors } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiBearerAuth, ApiConsumes, ApiTags } from "@nestjs/swagger";
 import { Response } from "express";
 import { diskStorage } from "multer";
 import * as path from "node:path";
 import { CurrentUser } from "../../shared/decorators/current-user.decorator";
+import { Public } from "../../shared/decorators/public.decorator";
 import type { AuthUser } from "../../shared/types/auth-user";
 import { PrismaService } from "../prisma/prisma.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
@@ -17,7 +19,8 @@ export class CreativesController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
-    private readonly storage: StorageService
+    private readonly storage: StorageService,
+    private readonly config: ConfigService
   ) {}
 
   @Post("upload")
@@ -45,13 +48,19 @@ export class CreativesController {
       data: {
         workspaceId,
         campaignId,
-        fileUrl: `/api/v1/creatives/files/${file.filename}`,
+        fileUrl: this.buildFileUrl(file.filename),
         fileName: file.originalname,
         fileType: file.mimetype,
         fileSize: file.size,
         uploadedBy: user.sub
       }
     });
+  }
+
+  private buildFileUrl(fileName: string) {
+    const base = this.config.get<string>("PUBLIC_BASE_URL", "").replace(/\/$/, "");
+    const prefix = this.config.get<string>("API_PREFIX", "api/v1").replace(/^\/|\/$/g, "");
+    return `${base}/${prefix}/creatives/files/${fileName}`;
   }
 
   @Get()
@@ -75,6 +84,7 @@ export class CreativesController {
     return { success: true };
   }
 
+  @Public()
   @Get("files/:fileName")
   file(@Param("fileName") fileName: string, @Res() response: Response) {
     return response.sendFile(this.storage.filePath(fileName));

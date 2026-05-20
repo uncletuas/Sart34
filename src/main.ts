@@ -13,7 +13,7 @@ async function bootstrap() {
   const apiPrefix = config.get<string>("API_PREFIX", "api/v1");
 
   app.setGlobalPrefix(apiPrefix);
-  app.use(helmet());
+  app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
   app.use(compression());
   app.enableCors({
     origin: true,

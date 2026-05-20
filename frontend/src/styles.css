@@ -1834,26 +1834,3 @@ a { color: var(--md-primary); }
   text-align: right;
 }
 .char-count.over { color: var(--md-error); }
-
-/* Demo mode indicators */
-.auth-demo-hint {
-  margin: 8px 0 0;
-  padding: 8px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--md-primary-container);
-  color: var(--md-on-primary-container);
-  font-size: 13px;
-}
-.demo-pill {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--md-accent);
-  color: #4a2e00;
-  font-size: 10px;
-  font-weight: 800;
-  vertical-align: middle;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}

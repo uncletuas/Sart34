@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { PrismaClient, LeadStatus } from "@prisma/client";
 import * as bcrypt from "bcrypt";
 

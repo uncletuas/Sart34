@@ -30,7 +30,7 @@ export class WorkspacesService {
           businessGoals: dto.businessGoals as Prisma.InputJsonValue | undefined,
           targetCustomerProfile: dto.targetCustomerProfile,
           members: { create: { userId, role: "OWNER" } },
-          wallet: { create: { balance: 0 } }
+          wallet: { create: { balance: 100 } }
         }
       });
       return workspace;

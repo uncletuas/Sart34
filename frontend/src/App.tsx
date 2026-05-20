@@ -42,7 +42,7 @@ import {
 } from "lucide-react";
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, Campaign, Creative, DEMO_MODE, Lead, SocialPost, Workspace } from "./api";
+import { api, Campaign, Creative, Lead, SocialPost, Workspace } from "./api";
 
 type Toast = { type: "success" | "error" | "info"; message: string };
 type BusinessTab = "home" | "library" | "inbox" | "profile";
@@ -269,7 +269,11 @@ function AuthPanel({ onReady, notify }: { onReady: () => void; notify: (toast: T
       const session =
         mode === "login"
           ? await api.login({ email: String(form.get("email")), password: String(form.get("password")) })
-          : await api.register({ name: String(form.get("name")), email: String(form.get("email")) });
+          : await api.register({
+              name: String(form.get("name")),
+              email: String(form.get("email")),
+              password: String(form.get("password"))
+            });
       api.saveSession(session);
       onReady();
     } catch (error) {
@@ -289,8 +293,7 @@ function AuthPanel({ onReady, notify }: { onReady: () => void; notify: (toast: T
       <section className="auth-card">
         <Brand large />
         <div className="auth-copy">
-          <h1>Sign in to Sart34</h1>
-          {DEMO_MODE ? <p className="auth-demo-hint">Prototype demo — sign in with any email and password to explore.</p> : null}
+          <h1>{mode === "login" ? "Sign in to Sart34" : "Create your Sart34 account"}</h1>
         </div>
         <div className="segmented" role="tablist">
           <button type="button" role="tab" aria-selected={mode === "login"} className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>Sign in</button>
@@ -301,9 +304,16 @@ function AuthPanel({ onReady, notify }: { onReady: () => void; notify: (toast: T
             <Field label="Your name"><input name="name" required autoComplete="name" /></Field>
           ) : null}
           <Field label="Email"><input name="email" type="email" required autoComplete="email" /></Field>
-          {mode === "login" ? (
-            <Field label="Password"><input name="password" type="password" required autoComplete="current-password" /></Field>
-          ) : null}
+          <Field label="Password">
+            <input
+              name="password"
+              type="password"
+              required
+              minLength={8}
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              placeholder={mode === "register" ? "At least 8 characters" : undefined}
+            />
+          </Field>
           <button className="filled-button" disabled={loading}>
             {loading ? <Loader2 className="spin" size={18} /> : null}
             {mode === "login" ? "Sign in" : "Create account"}
@@ -638,7 +648,7 @@ function AppBar({ title, subtitle, right }: { title: string; subtitle?: string; 
     <header className="appbar">
       <Brand />
       <div className="appbar-titles">
-        <strong>{title}{DEMO_MODE ? <span className="demo-pill">Demo</span> : null}</strong>
+        <strong>{title}</strong>
         {subtitle ? <span>{subtitle}</span> : null}
       </div>
       <div className="appbar-actions">{right}</div>

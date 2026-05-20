@@ -4,6 +4,9 @@
   "private": true,
   "description": "Sart34 backend API: AI ads, CRM, credits, and Meta campaign operations.",
   "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "nest build",
     "start": "node dist/main.js",

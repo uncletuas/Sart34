@@ -67,6 +67,32 @@ npm run dev
 
 The frontend listens on `http://localhost:5173` by default. Copy `frontend/.env.example` to `frontend/.env` if the API is not running at `http://localhost:4000/api/v1`.
 
+## Deploy to Render
+
+The repo ships a `render.yaml` blueprint that provisions everything:
+
+1. In the Render dashboard: **New → Blueprint**, then pick this repository.
+2. Render creates a managed PostgreSQL database, the NestJS API
+   (`sart34-api`), and the static React app (`sart34-web`). Database URL,
+   JWT secrets, and the encryption key are generated automatically.
+3. After the first deploy, confirm the URLs. If Render assigned names
+   other than `sart34-api` / `sart34-web`, update these env vars on the
+   API service — `PUBLIC_BASE_URL`, `APP_BASE_URL`, every `*_REDIRECT_URI`
+   — and `VITE_API_BASE_URL` on the web service, then redeploy.
+4. The super-admin sign-in is `admin@sart34.app`; its password is the
+   auto-generated `SART34_ADMIN_PASSWORD` value, visible under the
+   API service's Environment tab.
+5. Optional keys (`OPENAI_API_KEY`, Paystack, and the platform app
+   credentials) are pre-listed on the API service as blank entries —
+   fill them in when you have them. Without `OPENAI_API_KEY` the AI
+   endpoints return safe mock output; without Paystack keys credit
+   top-ups are granted instantly in mock mode.
+
+Migrations and the seed (pipeline stages, credit bundles, super-admin)
+run automatically on every deploy. Uploaded creatives are stored on the
+service's local disk, which is ephemeral on the free plan — attach a
+Render Disk for durable creative storage.
+
 ## Main API Groups
 
 - `POST /auth/register`, `POST /auth/login`, `GET /auth/me`
