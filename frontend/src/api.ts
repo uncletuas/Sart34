@@ -50,6 +50,19 @@ export type Lead = {
   createdAt: string;
 };
 
+export type SocialPost = {
+  id: string;
+  workspaceId: string;
+  caption: string;
+  mediaUrl?: string;
+  mediaType?: string;
+  platforms: string[];
+  status: "DRAFT" | "PUBLISHING" | "PUBLISHED" | "PARTIAL" | "FAILED";
+  results?: Array<{ platform: string; status: string; note: string }>;
+  publishedAt?: string;
+  createdAt: string;
+};
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api/v1";
 
 export class ApiClient {
@@ -284,6 +297,22 @@ export class ApiClient {
 
   walletTransactions(workspaceId: string) {
     return this.request<Array<{ id: string; amount: number; reason: string; createdAt: string; type: string }>>(`/wallet/transactions?workspaceId=${workspaceId}`);
+  }
+
+  posts(workspaceId: string) {
+    return this.request<SocialPost[]>(`/posts?workspaceId=${workspaceId}`);
+  }
+
+  createPost(payload: { workspaceId: string; caption: string; mediaUrl?: string; mediaType?: string; platforms: string[] }) {
+    return this.request<SocialPost>("/posts", { method: "POST", body: JSON.stringify(payload) });
+  }
+
+  publishPost(id: string) {
+    return this.request<SocialPost>(`/posts/${id}/publish`, { method: "POST" });
+  }
+
+  deletePost(id: string) {
+    return this.request<{ success: boolean }>(`/posts/${id}`, { method: "DELETE" });
   }
 
   adminUsers() {

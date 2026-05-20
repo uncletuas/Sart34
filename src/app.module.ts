@@ -13,6 +13,7 @@ import { CreativesModule } from "./modules/creatives/creatives.module";
 import { CrmModule } from "./modules/crm/crm.module";
 import { IntegrationsModule } from "./modules/integrations/integrations.module";
 import { NotificationsModule } from "./modules/notifications/notifications.module";
+import { PostsModule } from "./modules/posts/posts.module";
 import { PrismaModule } from "./modules/prisma/prisma.module";
 import { ReportingModule } from "./modules/reporting/reporting.module";
 import { TemplatesModule } from "./modules/templates/templates.module";
@@ -49,6 +50,7 @@ const queuesEnabled = process.env.DISABLE_QUEUES !== "true";
     WalletModule,
     ReportingModule,
     TemplatesModule,
+    PostsModule,
     AdminModule,
     NotificationsModule
   ],

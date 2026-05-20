@@ -373,17 +373,31 @@ a { color: var(--md-primary); }
 .hero-greeting span { font-size: 12px; font-weight: 700; color: var(--md-on-surface-muted); text-transform: uppercase; letter-spacing: 0.06em; }
 .hero-greeting h2 { margin: 4px 0 0; font-size: clamp(22px, 5vw, 28px); line-height: 1.2; letter-spacing: -0.01em; max-width: 28ch; }
 
-/* Stories rail */
+/* Stories rail — perpetual right-to-left marquee */
 .story-rail {
-  display: flex;
-  gap: var(--space-3);
-  overflow-x: auto;
-  padding: 4px 2px var(--space-2);
+  position: relative;
+  overflow: hidden;
   margin: 0 calc(-1 * var(--space-4));
-  padding-left: var(--space-4); padding-right: var(--space-4);
-  scrollbar-width: none;
+  padding: 4px 0 var(--space-2);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
 }
-.story-rail::-webkit-scrollbar { display: none; }
+.story-track {
+  display: flex;
+  gap: var(--space-5);
+  width: max-content;
+  padding: 0 calc(var(--space-5) / 2);
+  animation: story-marquee 38s linear infinite;
+}
+.story-rail:hover .story-track,
+.story-track:focus-within { animation-play-state: paused; }
+@keyframes story-marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(calc(-100% / 3)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .story-track { animation: none; width: 100%; justify-content: center; }
+}
 
 .story {
   flex: 0 0 auto;
@@ -1716,3 +1730,88 @@ a { color: var(--md-primary); }
 @media (min-width: 1024px) {
   .template-grid { grid-template-columns: repeat(3, 1fr); }
 }
+
+/* ─── Create menu (FAB) ──────────────────────── */
+
+.menu-backdrop {
+  position: fixed; inset: 0; z-index: 30;
+  display: grid; align-items: end; justify-content: stretch;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(4px);
+  animation: backdropIn 0.18s ease;
+}
+.create-menu {
+  margin: 0 auto;
+  width: min(560px, 100%);
+  display: grid; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4) calc(var(--space-5) + env(safe-area-inset-bottom, 0px));
+  background: var(--md-surface);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  box-shadow: var(--shadow-4);
+  animation: sheetIn 0.24s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.menu-grip {
+  width: 36px; height: 4px;
+  border-radius: 999px;
+  background: var(--md-outline);
+  margin: 4px auto 6px;
+}
+.create-menu-item {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: var(--space-3);
+  align-items: center;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  background: var(--md-surface-1);
+  border: 1px solid var(--md-outline-soft);
+  text-align: left;
+  transition: background 0.16s ease, transform 0.12s ease;
+}
+.create-menu-item:hover { background: var(--md-surface-2); transform: translateY(-1px); }
+.create-menu-item span:last-child { display: grid; gap: 2px; min-width: 0; }
+.create-menu-item strong { font-size: 15px; }
+.create-menu-item em { font-style: normal; font-size: 12px; color: var(--md-on-surface-muted); }
+.create-menu-icon {
+  width: 48px; height: 48px;
+  display: grid; place-items: center;
+  border-radius: 14px;
+  color: #fff;
+}
+.create-menu-icon.ad { background: linear-gradient(135deg, var(--md-primary), var(--md-secondary)); }
+.create-menu-icon.post { background: linear-gradient(135deg, var(--md-tertiary), #25D366); }
+
+/* ─── Social post card ───────────────────────── */
+
+.post-card.post-social { border-color: var(--md-outline-soft); }
+.post-avatar.post { background: linear-gradient(135deg, var(--md-tertiary), #25D366); }
+.post-caption {
+  margin: 0;
+  padding: 10px 14px 4px;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.post-results {
+  list-style: none;
+  margin: 0;
+  padding: 6px 14px 12px;
+  display: grid;
+  gap: 6px;
+}
+.post-results li {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: 8px;
+  align-items: start;
+  font-size: 12px;
+  color: var(--md-on-surface-muted);
+}
+.post-results li.ok svg { color: var(--md-success); }
+.post-results li.skip svg { color: var(--md-warn); }
+.post-actions.single { grid-template-columns: 1fr; }
+
+/* Compact upload drop (cross-post) */
+.upload-drop.compact { min-height: 160px; }
+.upload-drop.compact img,
+.upload-drop.compact video { max-height: 260px; }

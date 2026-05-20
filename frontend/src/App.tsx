@@ -13,12 +13,15 @@ import {
   ImagePlus,
   Inbox,
   Layout,
+  Globe,
   Loader2,
   LogOut,
   Mail,
+  Megaphone,
   MessageCircle,
   MoreHorizontal,
   Pause,
+  PenLine,
   Phone,
   Play,
   Plus,
@@ -29,7 +32,6 @@ import {
   ShieldCheck,
   Sparkles,
   Trash2,
-  Unplug,
   Upload,
   UserPlus,
   UserRound,
@@ -40,7 +42,7 @@ import {
 } from "lucide-react";
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, Campaign, Creative, Lead, Workspace } from "./api";
+import { api, Campaign, Creative, Lead, SocialPost, Workspace } from "./api";
 
 type Toast = { type: "success" | "error" | "info"; message: string };
 type BusinessTab = "home" | "library" | "inbox" | "profile";
@@ -273,6 +275,8 @@ function BusinessConsole({ user, logout, notify }: { user: { firstName: string; 
   const [tab, setTab] = useState<BusinessTab>("home");
   const [createTemplate, setCreateTemplate] = useState<Template | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
+  const [crossPostOpen, setCrossPostOpen] = useState(false);
   const [campaignDetail, setCampaignDetail] = useState<Campaign | null>(null);
   const [leadDetail, setLeadDetail] = useState<Lead | null>(null);
   const [issueCampaign, setIssueCampaign] = useState<Campaign | null>(null);
@@ -283,6 +287,7 @@ function BusinessConsole({ user, logout, notify }: { user: { firstName: string; 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [creatives, setCreatives] = useState<Creative[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [posts, setPosts] = useState<SocialPost[]>([]);
   const [accounts, setAccounts] = useState<IntegrationAccount[]>([]);
   const [overview, setOverview] = useState<{ walletBalance: number } | null>(null);
 
@@ -302,13 +307,14 @@ function BusinessConsole({ user, logout, notify }: { user: { firstName: string; 
     try {
       const activeWorkspace = await ensureWorkspace();
       setWorkspace(activeWorkspace);
-      const [campaignRows, leadRows, summary, accountRows, creativeRows, templateRows] = await Promise.all([
+      const [campaignRows, leadRows, summary, accountRows, creativeRows, templateRows, postRows] = await Promise.all([
         api.campaigns(activeWorkspace.id),
         api.leads(activeWorkspace.id),
         api.overview(activeWorkspace.id),
         api.integrations(activeWorkspace.id),
         api.creatives(activeWorkspace.id).catch(() => []),
-        api.templates().catch(() => [])
+        api.templates().catch(() => []),
+        api.posts(activeWorkspace.id).catch(() => [])
       ]);
       setCampaigns(campaignRows);
       setLeads(leadRows);
@@ -316,6 +322,7 @@ function BusinessConsole({ user, logout, notify }: { user: { firstName: string; 
       setAccounts(accountRows);
       setCreatives(creativeRows);
       setTemplates(templateRows);
+      setPosts(postRows);
     } catch (error) {
       notify({ type: "error", message: error instanceof Error ? error.message : "Could not sync Sart34." });
     } finally {
@@ -355,12 +362,30 @@ function BusinessConsole({ user, logout, notify }: { user: { firstName: string; 
           <HomeFeed
             user={user}
             campaigns={campaigns}
+            posts={posts}
             leads={leads}
             accounts={accounts}
             walletBalance={overview?.walletBalance ?? 0}
             onConnect={(platform) => setConnectPlatform(platform)}
             onOpenCampaign={setCampaignDetail}
             onFix={setIssueCampaign}
+            onDeletePost={async (id) => {
+              try {
+                await api.deletePost(id);
+                await load();
+              } catch (error) {
+                notify({ type: "error", message: error instanceof Error ? error.message : "Could not delete post" });
+              }
+            }}
+            onPublishPost={async (id) => {
+              try {
+                await api.publishPost(id);
+                notify({ type: "success", message: "Post sent to platforms" });
+                await load();
+              } catch (error) {
+                notify({ type: "error", message: error instanceof Error ? error.message : "Could not publish" });
+              }
+            }}
           />
         ) : null}
         {!loading && tab === "library" ? (
@@ -443,9 +468,31 @@ function BusinessConsole({ user, logout, notify }: { user: { firstName: string; 
       <BottomNav
         tab={tab}
         onTab={setTab}
-        onCreate={() => openCreate()}
+        onCreate={() => setCreateMenuOpen(true)}
         inboxBadge={leads.filter((lead) => lead.status === "NEW_LEAD").length + issueCount}
       />
+      {createMenuOpen ? (
+        <CreateMenu
+          onClose={() => setCreateMenuOpen(false)}
+          onAd={() => { setCreateMenuOpen(false); openCreate(); }}
+          onPost={() => { setCreateMenuOpen(false); setCrossPostOpen(true); }}
+        />
+      ) : null}
+      {crossPostOpen && workspace ? (
+        <CrossPostSheet
+          workspace={workspace}
+          accounts={accounts}
+          creatives={creatives}
+          onClose={() => setCrossPostOpen(false)}
+          onConnect={(platform) => setConnectPlatform(platform)}
+          onDone={() => {
+            setCrossPostOpen(false);
+            notify({ type: "success", message: "Post created" });
+            void load();
+          }}
+          notify={notify}
+        />
+      ) : null}
       {createOpen && workspace ? (
         <CreateAdSheet
           workspace={workspace}
@@ -563,21 +610,27 @@ function BottomTab({ active, onClick, icon, label, badge }: { active: boolean; o
 function HomeFeed({
   user,
   campaigns,
+  posts,
   leads,
   accounts,
   walletBalance,
   onConnect,
   onOpenCampaign,
-  onFix
+  onFix,
+  onDeletePost,
+  onPublishPost
 }: {
   user: { firstName: string };
   campaigns: Campaign[];
+  posts: SocialPost[];
   leads: Lead[];
   accounts: IntegrationAccount[];
   walletBalance: number;
   onConnect: (platform: PlatformDef) => void;
   onOpenCampaign: (campaign: Campaign) => void;
   onFix: (campaign: Campaign) => void;
+  onDeletePost: (id: string) => void | Promise<void>;
+  onPublishPost: (id: string) => void | Promise<void>;
 }) {
   const connectedIds = new Set(accounts.filter((account) => account.status === "CONNECTED").map((account) => account.provider));
   const pendingLeads = leads.filter((lead) => !["WON", "LOST"].includes(lead.status)).length;
@@ -592,6 +645,11 @@ function HomeFeed({
     { impressions: 0, leadsCount: 0 }
   );
 
+  const timeline: TimelineEntry[] = [
+    ...campaigns.map((campaign) => ({ kind: "campaign" as const, at: campaign.createdAt, campaign })),
+    ...posts.map((post) => ({ kind: "post" as const, at: post.createdAt, post }))
+  ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+
   return (
     <div className="feed">
       <section className="hero-greeting">
@@ -601,20 +659,7 @@ function HomeFeed({
         </div>
       </section>
 
-      <section className="story-rail" aria-label="Connected platforms">
-        {PLATFORMS.map((platform) => {
-          const isConnected = connectedIds.has(platform.id);
-          return (
-            <button key={platform.id} className={`story ${isConnected ? "live" : "idle"}`} onClick={() => onConnect(platform)}>
-              <span className="story-ring" style={{ background: isConnected ? `conic-gradient(${platform.accent}, ${platform.accent}80)` : "transparent" }}>
-                <span className="story-glyph" style={{ background: platform.accent }}>{platform.glyph}</span>
-              </span>
-              <span className="story-label">{platform.name}</span>
-              <span className="story-status">{isConnected ? "Live" : "Connect"}</span>
-            </button>
-          );
-        })}
-      </section>
+      <StoryRail connectedIds={connectedIds} onConnect={onConnect} />
 
       <section className="metric-row">
         <MetricChip icon={<Send size={18} />} label="Active ads" value={String(campaigns.filter((campaign) => ["ACTIVE", "READY_TO_LAUNCH", "SUBMITTED"].includes(campaign.status)).length)} />
@@ -623,21 +668,62 @@ function HomeFeed({
         <MetricChip icon={<Wallet size={18} />} label="Credits" value={String(walletBalance)} accent="warn" />
       </section>
 
-      {campaigns.length === 0 ? (
+      {timeline.length === 0 ? (
         <EmptyFeed />
       ) : (
         <div className="feed-stack">
-          {campaigns.map((campaign) => (
-            <AdPostCard
-              key={campaign.id}
-              campaign={campaign}
-              onOpen={() => onOpenCampaign(campaign)}
-              onFix={() => onFix(campaign)}
-            />
-          ))}
+          {timeline.map((entry) =>
+            entry.kind === "campaign" ? (
+              <AdPostCard
+                key={`c-${entry.campaign.id}`}
+                campaign={entry.campaign}
+                onOpen={() => onOpenCampaign(entry.campaign)}
+                onFix={() => onFix(entry.campaign)}
+              />
+            ) : (
+              <PostCard
+                key={`p-${entry.post.id}`}
+                post={entry.post}
+                onDelete={() => onDeletePost(entry.post.id)}
+                onPublish={() => onPublishPost(entry.post.id)}
+              />
+            )
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+type TimelineEntry =
+  | { kind: "campaign"; at: string; campaign: Campaign }
+  | { kind: "post"; at: string; post: SocialPost };
+
+function StoryRail({ connectedIds, onConnect }: { connectedIds: Set<string>; onConnect: (platform: PlatformDef) => void }) {
+  const loop = [...PLATFORMS, ...PLATFORMS, ...PLATFORMS];
+  return (
+    <section className="story-rail" aria-label="Connected platforms">
+      <div className="story-track">
+        {loop.map((platform, index) => {
+          const isConnected = connectedIds.has(platform.id);
+          return (
+            <button
+              key={`${platform.id}-${index}`}
+              className={`story ${isConnected ? "live" : "idle"}`}
+              onClick={() => onConnect(platform)}
+              aria-hidden={index >= PLATFORMS.length}
+              tabIndex={index >= PLATFORMS.length ? -1 : 0}
+            >
+              <span className="story-ring" style={{ background: isConnected ? `conic-gradient(${platform.accent}, ${platform.accent}80)` : "transparent" }}>
+                <span className="story-glyph" style={{ background: platform.accent }}>{platform.glyph}</span>
+              </span>
+              <span className="story-label">{platform.name}</span>
+              <span className="story-status">{isConnected ? "Live" : "Connect"}</span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
@@ -734,9 +820,249 @@ function EmptyFeed() {
   return (
     <article className="empty-feed">
       <div className="empty-feed-art" aria-hidden="true"><Sparkles size={28} /></div>
-      <h3>No ads yet</h3>
-      <p>Tap the plus button to upload media, pick platforms, and let Sart34 set up the rest.</p>
+      <h3>Nothing here yet</h3>
+      <p>Tap the plus button to run an ad or publish a post across your platforms.</p>
     </article>
+  );
+}
+
+function CreateMenu({ onClose, onAd, onPost }: { onClose: () => void; onAd: () => void; onPost: () => void }) {
+  return (
+    <div className="menu-backdrop" role="dialog" aria-modal="true" aria-label="Create" onClick={onClose}>
+      <div className="create-menu" onClick={(event) => event.stopPropagation()}>
+        <span className="menu-grip" aria-hidden="true" />
+        <button className="create-menu-item" onClick={onAd}>
+          <span className="create-menu-icon ad"><Megaphone size={22} /></span>
+          <span>
+            <strong>Ad campaign</strong>
+            <em>AI builds the campaign, you approve and launch</em>
+          </span>
+        </button>
+        <button className="create-menu-item" onClick={onPost}>
+          <span className="create-menu-icon post"><PenLine size={22} /></span>
+          <span>
+            <strong>Social post</strong>
+            <em>Write once, cross-post to every connected platform</em>
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PostCard({ post, onDelete, onPublish }: { post: SocialPost; onDelete: () => void; onPublish: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const platforms = post.platforms.map((id) => PLATFORM_BY_ID[id]).filter((value): value is PlatformDef => Boolean(value));
+  const isVideo = post.mediaType?.startsWith("video");
+
+  async function publish() {
+    setBusy(true);
+    try {
+      await onPublish();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <article className="post-card post-social">
+      <header className="post-head">
+        <div className="post-author">
+          <span className="post-avatar post"><PenLine size={16} /></span>
+          <div>
+            <strong>Social post</strong>
+            <span>{timeAgo(post.createdAt)}</span>
+          </div>
+        </div>
+        <button className="ghost-icon" aria-label="Delete" onClick={onDelete}><Trash2 size={18} /></button>
+      </header>
+
+      {post.mediaUrl ? (
+        <div className="post-creative">
+          {isVideo ? <video src={post.mediaUrl} muted loop playsInline /> : <img src={post.mediaUrl} alt="" />}
+        </div>
+      ) : null}
+
+      <p className="post-caption">{post.caption}</p>
+
+      <div className="post-platforms">
+        {platforms.map((platform) => (
+          <span key={platform.id} className="platform-pill" style={{ ['--accent' as never]: platform.accent }}>
+            <span className="platform-pill-glyph" style={{ background: platform.accent }}>{platform.glyph}</span>
+            {platform.name}
+          </span>
+        ))}
+        <SocialPostStatusPill value={post.status} />
+      </div>
+
+      {post.results && post.results.length ? (
+        <ul className="post-results">
+          {post.results.map((result) => (
+            <li key={result.platform} className={result.status === "QUEUED" ? "ok" : "skip"}>
+              {result.status === "QUEUED" ? <BadgeCheck size={14} /> : <AlertTriangle size={14} />}
+              <span>{PLATFORM_BY_ID[result.platform]?.name ?? result.platform}: {result.note}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
+      {post.status === "DRAFT" || post.status === "FAILED" || post.status === "PARTIAL" ? (
+        <footer className="post-actions single">
+          <button className="post-action primary" disabled={busy} onClick={() => void publish()}>
+            {busy ? <Loader2 className="spin" size={18} /> : <Globe size={18} />}
+            <span>{post.status === "DRAFT" ? "Publish to platforms" : "Retry publish"}</span>
+          </button>
+        </footer>
+      ) : null}
+    </article>
+  );
+}
+
+function SocialPostStatusPill({ value }: { value: SocialPost["status"] }) {
+  const map: Record<SocialPost["status"], { label: string; tone: string }> = {
+    DRAFT: { label: "Draft", tone: "muted" },
+    PUBLISHING: { label: "Publishing", tone: "info" },
+    PUBLISHED: { label: "Published", tone: "success" },
+    PARTIAL: { label: "Partly sent", tone: "warn" },
+    FAILED: { label: "Failed", tone: "danger" }
+  };
+  const entry = map[value];
+  return <span className={`status ${entry.tone}`}>{entry.label}</span>;
+}
+
+function CrossPostSheet({ workspace, accounts, creatives, onClose, onConnect, onDone, notify }: {
+  workspace: Workspace;
+  accounts: IntegrationAccount[];
+  creatives: Creative[];
+  onClose: () => void;
+  onConnect: (platform: PlatformDef) => void;
+  onDone: () => void;
+  notify: (toast: Toast) => void;
+}) {
+  const connectedIds = new Set(accounts.filter((account) => account.status === "CONNECTED").map((account) => account.provider));
+  const [caption, setCaption] = useState("");
+  const [media, setMedia] = useState<{ url: string; type: string; kind: "image" | "video" } | null>(null);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string[]>(PLATFORMS.filter((platform) => connectedIds.has(platform.id)).map((platform) => platform.id));
+  const [busy, setBusy] = useState<"draft" | "publish" | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  async function pickFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setLocalPreview(URL.createObjectURL(file));
+    try {
+      const uploaded = await api.uploadCreative(file, workspace.id);
+      setMedia({ url: uploaded.fileUrl, type: uploaded.fileType, kind: file.type.startsWith("video") ? "video" : "image" });
+    } catch (error) {
+      notify({ type: "error", message: error instanceof Error ? error.message : "Upload failed" });
+      setLocalPreview(null);
+    }
+  }
+
+  function toggle(id: string) {
+    setSelected((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
+  }
+
+  async function save(publish: boolean) {
+    if (!caption.trim()) {
+      notify({ type: "error", message: "Write a caption first" });
+      return;
+    }
+    if (selected.length === 0) {
+      notify({ type: "error", message: "Pick at least one platform" });
+      return;
+    }
+    setBusy(publish ? "publish" : "draft");
+    try {
+      const created = await api.createPost({
+        workspaceId: workspace.id,
+        caption: caption.trim(),
+        mediaUrl: media?.url,
+        mediaType: media?.type,
+        platforms: selected
+      });
+      if (publish) await api.publishPost(created.id);
+      onDone();
+    } catch (error) {
+      notify({ type: "error", message: error instanceof Error ? error.message : "Could not save post" });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <FullSheet onClose={onClose} title="New social post" subtitle="One post, every platform">
+      <div className="sheet-body">
+        <section className="form-step">
+          <button type="button" className="upload-drop compact" onClick={() => fileInput.current?.click()}>
+            {localPreview ? (
+              media?.kind === "video" ? <video src={localPreview} controls /> : <img src={localPreview} alt="" />
+            ) : (
+              <>
+                <Upload size={24} />
+                <strong>Add photo or video</strong>
+                <span>Optional</span>
+              </>
+            )}
+          </button>
+          <input ref={fileInput} type="file" accept="image/*,video/*" hidden onChange={pickFile} />
+          {creatives.length > 0 && !localPreview ? (
+            <>
+              <span className="field-label">Or reuse from library</span>
+              <div className="reuse-grid">
+                {creatives.slice(0, 9).map((creative) => {
+                  const isVideo = /\.(mp4|mov|webm)$/i.test(creative.fileName);
+                  return (
+                    <button key={creative.id} type="button" className={`reuse-tile ${media?.url === creative.fileUrl ? "selected" : ""}`} onClick={() => { setMedia({ url: creative.fileUrl, type: creative.fileType, kind: isVideo ? "video" : "image" }); setLocalPreview(creative.fileUrl); }}>
+                      {isVideo ? <video src={creative.fileUrl} muted /> : <img src={creative.fileUrl} alt="" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          ) : null}
+
+          <Field label="Caption">
+            <textarea value={caption} onChange={(event) => setCaption(event.target.value)} placeholder="Write your post once. Sart34 cross-posts it everywhere." />
+          </Field>
+
+          <span className="field-label">Post to</span>
+          <div className="platform-grid">
+            {PLATFORMS.map((platform) => {
+              const connected = connectedIds.has(platform.id);
+              const isSelected = selected.includes(platform.id);
+              return (
+                <button
+                  key={platform.id}
+                  type="button"
+                  className={`platform-card ${isSelected ? "selected" : ""} ${connected ? "" : "needs-link"}`}
+                  onClick={() => (connected ? toggle(platform.id) : onConnect(platform))}
+                  style={{ ['--accent' as never]: platform.accent }}
+                >
+                  <span className="platform-card-glyph" style={{ background: platform.accent }}>{platform.glyph}</span>
+                  <strong>{platform.name}</strong>
+                  <span>{platform.short}</span>
+                  <span className="platform-card-tag">
+                    {connected ? (isSelected ? <BadgeCheck size={14} /> : <Plus size={14} />) : <AlertTriangle size={14} />}
+                    {connected ? (isSelected ? "Selected" : "Tap to add") : "Connect first"}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      </div>
+
+      <footer className="sheet-footer">
+        <button className="ghost-button" onClick={() => void save(false)} disabled={busy !== null}>
+          {busy === "draft" ? <Loader2 className="spin" size={16} /> : null} Save draft
+        </button>
+        <button className="filled-button success" onClick={() => void save(true)} disabled={busy !== null}>
+          {busy === "publish" ? <Loader2 className="spin" size={18} /> : <Globe size={18} />} Publish now
+        </button>
+      </footer>
+    </FullSheet>
   );
 }
 
