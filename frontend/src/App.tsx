@@ -165,6 +165,20 @@ export function App() {
     return () => window.clearTimeout(id);
   }, [toast]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get("connected");
+    const connectError = params.get("connect_error");
+    if (connected) {
+      setToast({ type: "success", message: `${connected.toUpperCase()} account connected` });
+    } else if (connectError) {
+      setToast({ type: "error", message: `Could not connect ${connectError.toUpperCase()}` });
+    }
+    if (connected || connectError) {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
   return (
     <>
       {sessionReady ? (
@@ -941,11 +955,27 @@ function CrossPostSheet({ workspace, accounts, creatives, onClose, onConnect, on
 }) {
   const connectedIds = new Set(accounts.filter((account) => account.status === "CONNECTED").map((account) => account.provider));
   const [caption, setCaption] = useState("");
+  const [brief, setBrief] = useState("");
+  const [drafting, setDrafting] = useState(false);
   const [media, setMedia] = useState<{ url: string; type: string; kind: "image" | "video" } | null>(null);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>(PLATFORMS.filter((platform) => connectedIds.has(platform.id)).map((platform) => platform.id));
   const [busy, setBusy] = useState<"draft" | "publish" | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  async function draftWithAi() {
+    if (!brief.trim()) return;
+    setDrafting(true);
+    try {
+      const result = await api.draftPost({ workspaceId: workspace.id, prompt: brief.trim(), platforms: selected });
+      const tags = (result.hashtags ?? []).map((tag) => `#${tag.replace(/^#/, "")}`).join(" ");
+      setCaption([result.caption ?? "", tags].filter(Boolean).join("\n\n"));
+    } catch (error) {
+      notify({ type: "error", message: error instanceof Error ? error.message : "Could not draft the post" });
+    } finally {
+      setDrafting(false);
+    }
+  }
 
   async function pickFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -1023,8 +1053,16 @@ function CrossPostSheet({ workspace, accounts, creatives, onClose, onConnect, on
             </>
           ) : null}
 
+          <span className="field-label">Draft with AI</span>
+          <div className="ai-assist">
+            <input value={brief} onChange={(event) => setBrief(event.target.value)} placeholder="What is this post about?" />
+            <button type="button" className="filled-button compact" onClick={() => void draftWithAi()} disabled={drafting || !brief.trim()}>
+              {drafting ? <Loader2 className="spin" size={16} /> : <Sparkles size={16} />} Draft
+            </button>
+          </div>
+
           <Field label="Caption">
-            <textarea value={caption} onChange={(event) => setCaption(event.target.value)} placeholder="Write your post once. Sart34 cross-posts it everywhere." />
+            <textarea value={caption} onChange={(event) => setCaption(event.target.value)} placeholder="Write your post, or let the AI draft it above." />
           </Field>
 
           <span className="field-label">Post to</span>

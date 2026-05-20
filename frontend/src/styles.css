@@ -1815,3 +1815,12 @@ a { color: var(--md-primary); }
 .upload-drop.compact { min-height: 160px; }
 .upload-drop.compact img,
 .upload-drop.compact video { max-height: 260px; }
+
+/* AI assist row (cross-post drafting) */
+.ai-assist {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.ai-assist input { min-height: 44px; }
+.ai-assist .filled-button { flex: 0 0 auto; min-height: 44px; }

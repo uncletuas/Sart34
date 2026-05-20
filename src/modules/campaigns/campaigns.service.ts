@@ -1,6 +1,6 @@
 import { InjectQueue } from "@nestjs/bullmq";
 import { BadRequestException, Injectable, NotFoundException, Optional } from "@nestjs/common";
-import { CampaignStatus, Prisma } from "@prisma/client";
+import { CampaignStatus, Platform, Prisma } from "@prisma/client";
 import type { Queue } from "bullmq";
 import type { AuthUser } from "../../shared/types/auth-user";
 import { AiService } from "../ai/ai.service";
@@ -207,8 +207,12 @@ export class CampaignsService {
   }
 
   private async persistGeneratedCopy(campaignId: string, output: Record<string, unknown>) {
+    const validPlatforms = new Set<string>(["META", "FACEBOOK", "INSTAGRAM", "WHATSAPP", "TIKTOK", "GOOGLE"]);
     const copies = Array.isArray(output.ad_copies) ? output.ad_copies : [];
     for (const copy of copies as Array<Record<string, string>>) {
+      const platform = validPlatforms.has(String(copy.platform).toUpperCase())
+        ? (String(copy.platform).toUpperCase() as Platform)
+        : "META";
       await this.prisma.adCopy.create({
         data: {
           campaignId,
@@ -216,7 +220,7 @@ export class CampaignsService {
           headline: copy.headline ?? "",
           description: copy.description,
           callToAction: copy.cta,
-          platform: "META"
+          platform
         }
       });
     }

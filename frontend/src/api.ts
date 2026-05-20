@@ -315,6 +315,13 @@ export class ApiClient {
     return this.request<{ success: boolean }>(`/posts/${id}`, { method: "DELETE" });
   }
 
+  draftPost(payload: { workspaceId: string; prompt: string; platforms?: string[]; tone?: string }) {
+    return this.request<{ caption?: string; hashtags?: string[]; variants?: Array<{ platform: string; caption: string }> }>(
+      "/ai/post-draft",
+      { method: "POST", body: JSON.stringify(payload) }
+    );
+  }
+
   adminUsers() {
     return this.request<Array<{ id: string; firstName: string; lastName: string; email: string; role: string; isActive: boolean; createdAt: string }>>("/admin/users");
   }

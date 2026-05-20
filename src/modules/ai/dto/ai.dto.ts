@@ -1,4 +1,4 @@
-import { IsEnum, IsObject, IsOptional, IsString } from "class-validator";
+import { IsArray, IsEnum, IsObject, IsOptional, IsString } from "class-validator";
 import { MessageChannel } from "@prisma/client";
 
 export class GenerateCampaignDto {
@@ -30,4 +30,21 @@ export class FollowUpDto {
 
   @IsEnum(MessageChannel)
   channel!: MessageChannel;
+}
+
+export class PostDraftDto {
+  @IsString()
+  workspaceId!: string;
+
+  @IsString()
+  prompt!: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  platforms?: string[];
+
+  @IsOptional()
+  @IsString()
+  tone?: string;
 }

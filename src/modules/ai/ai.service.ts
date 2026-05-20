@@ -35,10 +35,21 @@ export class AiService {
 
   async generateCampaign(user: AuthUser, workspaceId: string, input: Record<string, unknown>, mode = "quick") {
     await this.workspaces.assertMembership(user.sub, user.role, workspaceId);
+    const platforms = Array.isArray((input as { targetPlatforms?: unknown }).targetPlatforms)
+      ? ((input as { targetPlatforms: string[] }).targetPlatforms)
+      : ["META"];
     const output = await this.structuredJson("campaign-generation", {
       mode,
+      targetPlatforms: platforms,
       instruction:
-        "Generate a Meta-first campaign. Return only JSON with campaign_name, objective, audiences, ad_copies, lead_form_questions, follow_up_messages, budget_recommendation, policy_risk.",
+        "Generate ad copy tailored to each target platform. Respect each platform's limits: " +
+        "META primary_text max 125 chars and headline max 40 chars; " +
+        "GOOGLE headlines max 30 chars (provide several) and descriptions max 90 chars; " +
+        "TIKTOK a short spoken hook plus an on-screen caption; " +
+        "WHATSAPP a concise opening message under 250 chars. " +
+        "Return only JSON with campaign_name, objective, audiences, " +
+        "ad_copies (array, one or more per platform, each with platform, primary_text, headline, description, cta), " +
+        "lead_form_questions, follow_up_messages, budget_recommendation, policy_risk.",
       input
     });
     await this.prisma.aiGeneration.create({
@@ -50,6 +61,34 @@ export class AiService {
         provider: this.client ? "openai" : "mock",
         model: this.model,
         creditCost: 20
+      }
+    });
+    return output;
+  }
+
+  async generatePost(
+    user: AuthUser,
+    workspaceId: string,
+    input: { prompt: string; platforms?: string[]; tone?: string }
+  ) {
+    await this.workspaces.assertMembership(user.sub, user.role, workspaceId);
+    const output = await this.structuredJson("post-draft", {
+      instruction:
+        "Draft one engaging organic social media caption that works across the given platforms. " +
+        "Keep it concise, native to social feeds, and free of policy-risky or guaranteed-result claims. " +
+        "Return only JSON with caption (string), hashtags (array of words without the # symbol), and " +
+        "variants (array of { platform, caption } only for platforms that clearly benefit from a tailored version).",
+      input
+    });
+    await this.prisma.aiGeneration.create({
+      data: {
+        workspaceId,
+        type: "post-draft",
+        prompt: JSON.stringify(input),
+        outputJson: output as Prisma.InputJsonValue,
+        provider: this.client ? "openai" : "mock",
+        model: this.model,
+        creditCost: 5
       }
     });
     return output;
@@ -112,6 +151,13 @@ export class AiService {
   }
 
   private mockOutput(type: string, payload: Record<string, unknown>) {
+    if (type === "post-draft") {
+      return {
+        caption: "We just dropped something we think you'll love. Tap in, take a look, and tell us what you think.",
+        hashtags: ["smallbusiness", "newdrop", "shoplocal"],
+        variants: []
+      };
+    }
     if (type === "optimization") {
       return {
         copy: ["Lead with a stronger 3 word hook", "Add a price anchor to set expectations"],
