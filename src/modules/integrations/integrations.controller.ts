@@ -38,6 +38,16 @@ export class IntegrationsController {
     return this.integrations.whatsappConnect(user, dto.workspaceId);
   }
 
+  @Post("linkedin/connect")
+  linkedinConnect(@CurrentUser() user: AuthUser, @Body() dto: MetaConnectDto) {
+    return this.integrations.linkedinConnect(user, dto.workspaceId);
+  }
+
+  @Post("x/connect")
+  xConnect(@CurrentUser() user: AuthUser, @Body() dto: MetaConnectDto) {
+    return this.integrations.xConnect(user, dto.workspaceId);
+  }
+
   @Public()
   @Post("meta/callback")
   metaCallback(@Body() dto: MetaCallbackDto) {
@@ -66,6 +76,18 @@ export class IntegrationsController {
   @Get("whatsapp/callback")
   async whatsappOAuthCallback(@Query("code") code: string, @Query("state") state: string, @Query("error") error: string, @Res() res: Response) {
     res.redirect(await this.integrations.handleOAuthCallback("WHATSAPP", code, state, error));
+  }
+
+  @Public()
+  @Get("linkedin/callback")
+  async linkedinOAuthCallback(@Query("code") code: string, @Query("state") state: string, @Query("error") error: string, @Res() res: Response) {
+    res.redirect(await this.integrations.handleOAuthCallback("LINKEDIN", code, state, error));
+  }
+
+  @Public()
+  @Get("x/callback")
+  async xOAuthCallback(@Query("code") code: string, @Query("state") state: string, @Query("error") error: string, @Res() res: Response) {
+    res.redirect(await this.integrations.handleOAuthCallback("X", code, state, error));
   }
 
   @Delete(":id")

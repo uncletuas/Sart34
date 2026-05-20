@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { HttpService } from "@nestjs/axios";
 import { Injectable } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -9,7 +10,7 @@ import { PrismaService } from "../prisma/prisma.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { MetaCallbackDto } from "./dto/integrations.dto";
 
-type OAuthProvider = "META" | "GOOGLE" | "TIKTOK" | "WHATSAPP";
+type OAuthProvider = "META" | "GOOGLE" | "TIKTOK" | "WHATSAPP" | "LINKEDIN" | "X";
 
 type ExchangedToken = {
   accessToken: string;
@@ -102,6 +103,37 @@ export class IntegrationsService {
     };
   }
 
+  async linkedinConnect(user: AuthUser, workspaceId: string) {
+    await this.workspaces.assertMembership(user.sub, user.role, workspaceId, ["OWNER", "ADMIN"]);
+    const clientId = this.config.get<string>("LINKEDIN_CLIENT_ID", "");
+    const redirect = encodeURIComponent(this.config.get<string>("LINKEDIN_REDIRECT_URI", ""));
+    const state = encodeURIComponent(JSON.stringify({ workspaceId, userId: user.sub }));
+    const scope = encodeURIComponent("r_ads rw_ads r_organization_social w_organization_social r_basicprofile");
+    return {
+      authorizationUrl: clientId
+        ? `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${clientId}&redirect_uri=${redirect}&state=${state}&scope=${scope}`
+        : null,
+      message: clientId ? "Redirect the user to authorizationUrl." : "LINKEDIN_CLIENT_ID is not configured."
+    };
+  }
+
+  async xConnect(user: AuthUser, workspaceId: string) {
+    await this.workspaces.assertMembership(user.sub, user.role, workspaceId, ["OWNER", "ADMIN"]);
+    const clientId = this.config.get<string>("X_CLIENT_ID", "");
+    const redirect = encodeURIComponent(this.config.get<string>("X_REDIRECT_URI", ""));
+    // X requires PKCE. With the plain method, code_challenge equals code_verifier;
+    // the verifier is carried in state so the stateless callback can complete the exchange.
+    const verifier = randomBytes(32).toString("hex");
+    const state = encodeURIComponent(JSON.stringify({ workspaceId, userId: user.sub, v: verifier }));
+    const scope = encodeURIComponent("tweet.read tweet.write users.read offline.access");
+    return {
+      authorizationUrl: clientId
+        ? `https://twitter.com/i/oauth2/authorize?response_type=code&client_id=${clientId}&redirect_uri=${redirect}&state=${state}&scope=${scope}&code_challenge=${verifier}&code_challenge_method=plain`
+        : null,
+      message: clientId ? "Redirect the user to authorizationUrl." : "X_CLIENT_ID is not configured."
+    };
+  }
+
   async metaCallback(dto: MetaCallbackDto) {
     return this.prisma.integrationAccount.upsert({
       where: { id: dto.externalAccountId ?? `${dto.workspaceId}-meta` },
@@ -134,16 +166,18 @@ export class IntegrationsService {
     if (!code || !stateRaw) return fail("missing_code");
 
     let workspaceId: string;
+    let verifier: string | undefined;
     try {
-      const state = JSON.parse(decodeURIComponent(stateRaw)) as { workspaceId?: string };
+      const state = JSON.parse(decodeURIComponent(stateRaw)) as { workspaceId?: string; v?: string };
       if (!state.workspaceId) return fail("missing_workspace");
       workspaceId = state.workspaceId;
+      verifier = state.v;
     } catch {
       return fail("bad_state");
     }
 
     try {
-      const token = await this.exchangeOAuthCode(provider, code);
+      const token = await this.exchangeOAuthCode(provider, code, verifier);
       const id = `${workspaceId}-${provider.toLowerCase()}`;
       const fields = {
         accessTokenEncrypted: this.encryption.encrypt(token.accessToken),
@@ -164,7 +198,7 @@ export class IntegrationsService {
     }
   }
 
-  private async exchangeOAuthCode(provider: OAuthProvider, code: string): Promise<ExchangedToken> {
+  private async exchangeOAuthCode(provider: OAuthProvider, code: string, verifier?: string): Promise<ExchangedToken> {
     if (provider === "META" || provider === "WHATSAPP") {
       const appId = this.config.get<string>(provider === "META" ? "META_APP_ID" : "WHATSAPP_APP_ID")
         || this.config.get<string>("META_APP_ID");
@@ -213,6 +247,64 @@ export class IntegrationsService {
             grant_type: "authorization_code"
           }).toString(),
           { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+        )
+      );
+      const accessToken = tokenResponse.data?.access_token as string | undefined;
+      if (!accessToken) throw new Error("no_access_token");
+      const expiresIn = Number(tokenResponse.data?.expires_in ?? 0);
+      return {
+        accessToken,
+        refreshToken: tokenResponse.data?.refresh_token as string | undefined,
+        expiresAt: expiresIn ? new Date(Date.now() + expiresIn * 1000) : undefined
+      };
+    }
+
+    if (provider === "LINKEDIN") {
+      const clientId = this.config.get<string>("LINKEDIN_CLIENT_ID");
+      const clientSecret = this.config.get<string>("LINKEDIN_CLIENT_SECRET");
+      const redirectUri = this.config.get<string>("LINKEDIN_REDIRECT_URI", "");
+      if (!clientId || !clientSecret) throw new Error("provider_not_configured");
+      const tokenResponse = await firstValueFrom(
+        this.http.post(
+          "https://www.linkedin.com/oauth/v2/accessToken",
+          new URLSearchParams({
+            grant_type: "authorization_code",
+            code,
+            client_id: clientId,
+            client_secret: clientSecret,
+            redirect_uri: redirectUri
+          }).toString(),
+          { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+        )
+      );
+      const accessToken = tokenResponse.data?.access_token as string | undefined;
+      if (!accessToken) throw new Error("no_access_token");
+      const expiresIn = Number(tokenResponse.data?.expires_in ?? 0);
+      return {
+        accessToken,
+        refreshToken: tokenResponse.data?.refresh_token as string | undefined,
+        expiresAt: expiresIn ? new Date(Date.now() + expiresIn * 1000) : undefined
+      };
+    }
+
+    if (provider === "X") {
+      const clientId = this.config.get<string>("X_CLIENT_ID");
+      const clientSecret = this.config.get<string>("X_CLIENT_SECRET");
+      const redirectUri = this.config.get<string>("X_REDIRECT_URI", "");
+      if (!clientId || !clientSecret) throw new Error("provider_not_configured");
+      if (!verifier) throw new Error("missing_pkce_verifier");
+      const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+      const tokenResponse = await firstValueFrom(
+        this.http.post(
+          "https://api.twitter.com/2/oauth2/token",
+          new URLSearchParams({
+            grant_type: "authorization_code",
+            code,
+            client_id: clientId,
+            redirect_uri: redirectUri,
+            code_verifier: verifier
+          }).toString(),
+          { headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Basic ${basic}` } }
         )
       );
       const accessToken = tokenResponse.data?.access_token as string | undefined;

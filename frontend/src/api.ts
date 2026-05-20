@@ -1,3 +1,5 @@
+import { demoRequest } from "./demo";
+
 export type Session = {
   accessToken: string;
   refreshToken: string;
@@ -63,7 +65,9 @@ export type SocialPost = {
   createdAt: string;
 };
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api/v1";
+const RAW_API_BASE = import.meta.env.VITE_API_BASE_URL;
+export const DEMO_MODE = !RAW_API_BASE || import.meta.env.VITE_DEMO_MODE === "true";
+const API_BASE = RAW_API_BASE ?? "http://localhost:4000/api/v1";
 
 export class ApiClient {
   private accessToken = localStorage.getItem("sart34.accessToken") ?? "";
@@ -88,6 +92,7 @@ export class ApiClient {
   }
 
   async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+    if (DEMO_MODE) return demoRequest<T>(path, options);
     const headers = new Headers(options.headers);
     if (!(options.body instanceof FormData)) headers.set("Content-Type", "application/json");
     if (this.accessToken) headers.set("Authorization", `Bearer ${this.accessToken}`);
@@ -202,6 +207,20 @@ export class ApiClient {
 
   whatsappConnect(workspaceId: string) {
     return this.request<{ authorizationUrl: string | null; message: string }>("/integrations/whatsapp/connect", {
+      method: "POST",
+      body: JSON.stringify({ workspaceId })
+    });
+  }
+
+  linkedinConnect(workspaceId: string) {
+    return this.request<{ authorizationUrl: string | null; message: string }>("/integrations/linkedin/connect", {
+      method: "POST",
+      body: JSON.stringify({ workspaceId })
+    });
+  }
+
+  xConnect(workspaceId: string) {
+    return this.request<{ authorizationUrl: string | null; message: string }>("/integrations/x/connect", {
       method: "POST",
       body: JSON.stringify({ workspaceId })
     });

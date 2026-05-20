@@ -59,6 +59,8 @@ enum Platform {
   WHATSAPP
   TIKTOK
   GOOGLE
+  LINKEDIN
+  X
 }
 
 enum CreativeStatus {
@@ -74,6 +76,8 @@ enum IntegrationProvider {
   FLUTTERWAVE
   GOOGLE
   TIKTOK
+  LINKEDIN
+  X
 }
 
 enum IntegrationStatus {

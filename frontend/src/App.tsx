@@ -42,7 +42,7 @@ import {
 } from "lucide-react";
 import type { ChangeEvent, FormEvent, ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, Campaign, Creative, Lead, SocialPost, Workspace } from "./api";
+import { api, Campaign, Creative, DEMO_MODE, Lead, SocialPost, Workspace } from "./api";
 
 type Toast = { type: "success" | "error" | "info"; message: string };
 type BusinessTab = "home" | "library" | "inbox" | "profile";
@@ -74,7 +74,11 @@ type PlatformDef = {
   accent: string;
   glyph: string;
   formats: string[];
+  adStructure: string;
   requirements: Requirement[];
+  supportsOrganicPost: boolean;
+  postCaptionLimit: number;
+  postNote: string;
   connect: (workspaceId: string) => Promise<{ authorizationUrl: string | null; message: string }>;
 };
 
@@ -83,60 +87,122 @@ const PLATFORMS: PlatformDef[] = [
     id: "META",
     name: "Meta",
     short: "Facebook + Instagram",
-    surfaces: ["Instagram Feed", "Reels", "Stories", "Facebook Feed"],
+    surfaces: ["Instagram Feed", "Reels", "Stories", "Facebook Feed", "Marketplace"],
     accent: "#1877F2",
     glyph: "ƒ",
-    formats: ["Image", "Video 9:16", "Carousel"],
+    formats: ["Single image 1:1 / 4:5", "Video & Reels 9:16", "Carousel", "Collection"],
+    adStructure: "Campaign → Ad set (budget, audience, placements) → Ad",
     requirements: [
       { key: "page", label: "Facebook Page" },
-      { key: "adAccount", label: "Ad account" },
-      { key: "pixel", label: "Pixel / Conversions API" }
+      { key: "instagram", label: "Instagram account", hint: "Optional, needed for Instagram placements" },
+      { key: "adAccount", label: "Meta ad account" },
+      { key: "pixel", label: "Pixel / Conversions API", hint: "Tracks conversions and powers optimization" },
+      { key: "payment", label: "Payment method on the ad account" }
     ],
+    supportsOrganicPost: true,
+    postCaptionLimit: 2200,
+    postNote: "Posts as a Page / Instagram feed post or Reel.",
     connect: (workspaceId) => api.metaConnect(workspaceId)
   },
   {
     id: "GOOGLE",
     name: "Google Ads",
     short: "Search, YouTube, Display, PMax",
-    surfaces: ["Google Search", "YouTube", "Display", "Maps"],
+    surfaces: ["Google Search", "YouTube", "Display Network", "Discover", "Gmail", "Maps"],
     accent: "#1A73E8",
     glyph: "G",
-    formats: ["Responsive Search", "Performance Max", "Video"],
+    formats: ["Responsive Search Ad", "Performance Max", "Display", "Video"],
+    adStructure: "Campaign (Search / PMax / Display / Video) → Ad group or Asset group → Ad",
     requirements: [
+      { key: "adAccount", label: "Google Ads account + billing" },
       { key: "businessName", label: "Business name" },
       { key: "finalUrl", label: "Final URL", type: "url" },
-      { key: "headlines", label: "5 to 15 headlines (30 chars)" },
-      { key: "descriptions", label: "2 to 4 descriptions (90 chars)" }
+      { key: "headlines", label: "5 to 15 headlines, max 30 characters each" },
+      { key: "descriptions", label: "2 to 4 descriptions, max 90 characters each" },
+      { key: "conversion", label: "Conversion tracking (Google tag)" }
     ],
+    supportsOrganicPost: false,
+    postCaptionLimit: 0,
+    postNote: "Google is an ads network, not a social feed — used for ad campaigns only.",
     connect: (workspaceId) => api.googleConnect(workspaceId)
   },
   {
     id: "TIKTOK",
     name: "TikTok",
     short: "For You + Spark Ads",
-    surfaces: ["For You", "Top View", "Spark Ads"],
+    surfaces: ["For You feed", "TopView", "Spark Ads"],
     accent: "#000000",
     glyph: "♪",
-    formats: ["Video 9:16", "Spark Ad"],
+    formats: ["In-feed video 9:16 (9-60s)", "Spark Ad (boost an organic post)"],
+    adStructure: "Campaign → Ad group (budget, audience) → Ad",
     requirements: [
-      { key: "identity", label: "TikTok identity / handle" },
-      { key: "pixel", label: "TikTok Pixel" }
+      { key: "adAccount", label: "TikTok Ads Manager account" },
+      { key: "identity", label: "TikTok Business account / identity" },
+      { key: "pixel", label: "TikTok Pixel" },
+      { key: "payment", label: "Payment method" }
     ],
+    supportsOrganicPost: true,
+    postCaptionLimit: 2200,
+    postNote: "Posts as a native vertical video; sound-on works best.",
     connect: (workspaceId) => api.tiktokConnect(workspaceId)
   },
   {
     id: "WHATSAPP",
     name: "WhatsApp Business",
     short: "Click to chat + Catalog",
-    surfaces: ["Click to WhatsApp", "Catalog", "Broadcast"],
+    surfaces: ["Click-to-WhatsApp ads", "Status", "Broadcast", "Catalog"],
     accent: "#25D366",
     glyph: "✓",
-    formats: ["Click to chat", "Catalog message", "Broadcast template"],
+    formats: ["Click to chat", "Status update", "Broadcast template", "Catalog message"],
+    adStructure: "Click-to-WhatsApp ads are created and run through Meta Ads Manager",
     requirements: [
-      { key: "whatsappNumber", label: "Verified WhatsApp number", type: "tel" },
-      { key: "openingMessage", label: "Pre-filled opening message" }
+      { key: "whatsappNumber", label: "Verified WhatsApp Business number", type: "tel" },
+      { key: "businessProfile", label: "Business profile (logo, hours, address)" },
+      { key: "template", label: "Approved message templates", hint: "Required for broadcasts" }
     ],
+    supportsOrganicPost: true,
+    postCaptionLimit: 1024,
+    postNote: "Publishes as a Status update; broadcasts need an approved template.",
     connect: (workspaceId) => api.whatsappConnect(workspaceId)
+  },
+  {
+    id: "LINKEDIN",
+    name: "LinkedIn",
+    short: "B2B feed + lead gen",
+    surfaces: ["LinkedIn Feed (Sponsored Content)", "Message Ads", "Conversation Ads"],
+    accent: "#0A66C2",
+    glyph: "in",
+    formats: ["Single image", "Video", "Carousel", "Document ad", "Lead gen form"],
+    adStructure: "Campaign group → Campaign (objective, audience) → Ad",
+    requirements: [
+      { key: "page", label: "LinkedIn Page" },
+      { key: "adAccount", label: "Campaign Manager ad account + billing" },
+      { key: "insightTag", label: "LinkedIn Insight Tag", hint: "Conversion tracking" },
+      { key: "audience", label: "Audience by job title, seniority, function, industry" }
+    ],
+    supportsOrganicPost: true,
+    postCaptionLimit: 3000,
+    postNote: "Posts to the company Page; professional tone performs best.",
+    connect: (workspaceId) => api.linkedinConnect(workspaceId)
+  },
+  {
+    id: "X",
+    name: "X",
+    short: "Promoted posts",
+    surfaces: ["Home timeline", "Search", "Profiles"],
+    accent: "#000000",
+    glyph: "𝕏",
+    formats: ["Promoted post", "Image", "Video", "Carousel"],
+    adStructure: "Campaign (objective, budget) → Ad group → Ad (promoted post)",
+    requirements: [
+      { key: "profile", label: "X profile to promote from" },
+      { key: "adAccount", label: "X Ads account + billing" },
+      { key: "audience", label: "Audience by interests, keywords, follower lookalikes" }
+    ],
+    supportsOrganicPost: true,
+    postCaptionLimit: 280,
+    postNote: "Posts must fit 280 characters.",
+    connect: (workspaceId) => api.xConnect(workspaceId)
   }
 ];
 
@@ -224,6 +290,7 @@ function AuthPanel({ onReady, notify }: { onReady: () => void; notify: (toast: T
         <Brand large />
         <div className="auth-copy">
           <h1>Sign in to Sart34</h1>
+          {DEMO_MODE ? <p className="auth-demo-hint">Prototype demo — sign in with any email and password to explore.</p> : null}
         </div>
         <div className="segmented" role="tablist">
           <button type="button" role="tab" aria-selected={mode === "login"} className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>Sign in</button>
@@ -571,7 +638,7 @@ function AppBar({ title, subtitle, right }: { title: string; subtitle?: string; 
     <header className="appbar">
       <Brand />
       <div className="appbar-titles">
-        <strong>{title}</strong>
+        <strong>{title}{DEMO_MODE ? <span className="demo-pill">Demo</span> : null}</strong>
         {subtitle ? <span>{subtitle}</span> : null}
       </div>
       <div className="appbar-actions">{right}</div>
@@ -954,14 +1021,20 @@ function CrossPostSheet({ workspace, accounts, creatives, onClose, onConnect, on
   notify: (toast: Toast) => void;
 }) {
   const connectedIds = new Set(accounts.filter((account) => account.status === "CONNECTED").map((account) => account.provider));
+  const postablePlatforms = PLATFORMS.filter((platform) => platform.supportsOrganicPost);
   const [caption, setCaption] = useState("");
   const [brief, setBrief] = useState("");
   const [drafting, setDrafting] = useState(false);
   const [media, setMedia] = useState<{ url: string; type: string; kind: "image" | "video" } | null>(null);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
-  const [selected, setSelected] = useState<string[]>(PLATFORMS.filter((platform) => connectedIds.has(platform.id)).map((platform) => platform.id));
+  const [selected, setSelected] = useState<string[]>(postablePlatforms.filter((platform) => connectedIds.has(platform.id)).map((platform) => platform.id));
   const [busy, setBusy] = useState<"draft" | "publish" | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  const captionLimit = selected.length
+    ? Math.min(...selected.map((id) => PLATFORM_BY_ID[id]?.postCaptionLimit ?? 2200))
+    : 2200;
+  const overLimit = caption.length > captionLimit;
 
   async function draftWithAi() {
     if (!brief.trim()) return;
@@ -1001,6 +1074,10 @@ function CrossPostSheet({ workspace, accounts, creatives, onClose, onConnect, on
     }
     if (selected.length === 0) {
       notify({ type: "error", message: "Pick at least one platform" });
+      return;
+    }
+    if (publish && overLimit) {
+      notify({ type: "error", message: `Caption is too long — ${captionLimit} character limit` });
       return;
     }
     setBusy(publish ? "publish" : "draft");
@@ -1064,10 +1141,14 @@ function CrossPostSheet({ workspace, accounts, creatives, onClose, onConnect, on
           <Field label="Caption">
             <textarea value={caption} onChange={(event) => setCaption(event.target.value)} placeholder="Write your post, or let the AI draft it above." />
           </Field>
+          <div className={`char-count ${overLimit ? "over" : ""}`}>
+            {caption.length} / {captionLimit}
+            {overLimit ? ` — too long for ${selected.map((id) => PLATFORM_BY_ID[id]?.name).filter(Boolean).join(", ")}` : ""}
+          </div>
 
           <span className="field-label">Post to</span>
           <div className="platform-grid">
-            {PLATFORMS.map((platform) => {
+            {postablePlatforms.map((platform) => {
               const connected = connectedIds.has(platform.id);
               const isSelected = selected.includes(platform.id);
               return (
@@ -1917,6 +1998,40 @@ function PlatformPreview({ platform, media, brief, budget, audience }: {
           <div className="wa-quick"><span>{budget.callToAction}</span><span>See catalog</span></div>
         </div>
         <span className="preview-foot">Click-to-WhatsApp · Catalog · Broadcast</span>
+      </div>
+    );
+  }
+
+  if (platform.id === "LINKEDIN") {
+    return (
+      <div className="preview linkedin-preview">
+        <div className="li-head">
+          <div className="li-avatar">in</div>
+          <div><strong>Your Company</strong><span>Promoted · {audience.location || "Global"}</span></div>
+        </div>
+        <p className="li-body">{body}</p>
+        <div className="li-media">{media ? (media.kind === "video" ? <video src={media.url} controls /> : <img src={media.url} alt="" />) : <PreviewPlaceholder />}</div>
+        <div className="li-card">
+          <strong>{headline}</strong>
+          <span>your-business.com</span>
+          <button className="preview-cta li-cta">{budget.callToAction}</button>
+        </div>
+        <span className="preview-foot">Sponsored Content · Lead Gen Form</span>
+      </div>
+    );
+  }
+
+  if (platform.id === "X") {
+    return (
+      <div className="preview x-preview">
+        <div className="x-head">
+          <div className="x-avatar">𝕏</div>
+          <div><strong>Your Brand</strong> <span>@yourbrand · Promoted</span></div>
+        </div>
+        <p>{body.slice(0, 240)}</p>
+        <div className="x-media">{media ? (media.kind === "video" ? <video src={media.url} controls /> : <img src={media.url} alt="" />) : <PreviewPlaceholder />}</div>
+        <div className="x-actions"><MessageCircle size={16} /> <RefreshCw size={16} /> <Eye size={16} /></div>
+        <span className="preview-foot">Promoted post on the X timeline</span>
       </div>
     );
   }
