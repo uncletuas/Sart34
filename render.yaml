@@ -6,6 +6,7 @@ databases:
     databaseName: sart34
     user: sart34
     plan: free
+    region: oregon
 
 services:
   # ---- Backend API (NestJS) ----
