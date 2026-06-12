@@ -668,42 +668,11 @@ function AppBar({ title, subtitle, right }: { title: string; subtitle?: string; 
 function Brand({ large = false }: { large?: boolean }) {
   return (
     <div className={`brand ${large ? "brand-large" : ""}`}>
-      <svg
+      <img
+        src="https://www.image2url.com/r2/default/images/1781258515591-d82239b0-a624-44cb-a8f1-e81646e70fa8.png"
+        alt="Sart34"
         className="brand-logo"
-        viewBox="0 0 80 96"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        aria-label="Sart34"
-      >
-        <defs>
-          <linearGradient id="brandGrad" x1="8" y1="8" x2="72" y2="88" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#52D177" />
-            <stop offset="0.5" stopColor="#3DBB61" />
-            <stop offset="1" stopColor="#1A7835" />
-          </linearGradient>
-          <linearGradient id="brandShadow" x1="8" y1="44" x2="72" y2="56" gradientUnits="userSpaceOnUse">
-            <stop stopColor="#1A7835" stopOpacity="0.35" />
-            <stop offset="1" stopColor="#1A7835" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {/* S ribbon — single stroke path */}
-        <path
-          d="M60 10 C68 10 72 16 72 23 C72 30 68 35 60 38 L20 50 C12 53 8 59 8 67 C8 76 14 86 26 86 L60 86"
-          stroke="url(#brandGrad)"
-          strokeWidth="16"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          fill="none"
-        />
-        {/* Shadow at mid-crossover */}
-        <path
-          d="M60 38 L20 50"
-          stroke="url(#brandShadow)"
-          strokeWidth="16"
-          strokeLinecap="butt"
-          fill="none"
-        />
-      </svg>
+      />
       {large ? <strong className="brand-name">Sart34</strong> : null}
     </div>
   );
