@@ -8,6 +8,7 @@ import {
   CircleDollarSign,
   Compass,
   Eye,
+  EyeOff,
   FolderOpen,
   Home,
   ImagePlus,
@@ -260,6 +261,7 @@ export function App() {
 function AuthPanel({ onReady, notify }: { onReady: () => void; notify: (toast: Toast) => void }) {
   const [mode, setMode] = useState<"login" | "register">("login");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -293,7 +295,8 @@ function AuthPanel({ onReady, notify }: { onReady: () => void; notify: (toast: T
       <section className="auth-card">
         <Brand large />
         <div className="auth-copy">
-          <h1>{mode === "login" ? "Sign in to Sart34" : "Create your Sart34 account"}</h1>
+          <h1>{mode === "login" ? "Welcome back" : "Create your account"}</h1>
+          <p>{mode === "login" ? "Sign in to your Sart34 workspace." : "Start running smarter ads in minutes."}</p>
         </div>
         <div className="segmented" role="tablist">
           <button type="button" role="tab" aria-selected={mode === "login"} className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>Sign in</button>
@@ -301,19 +304,25 @@ function AuthPanel({ onReady, notify }: { onReady: () => void; notify: (toast: T
         </div>
         <form onSubmit={submit} className="form-stack">
           {mode === "register" ? (
-            <Field label="Your name"><input name="name" required autoComplete="name" /></Field>
+            <Field label="Full name"><input name="name" required autoComplete="name" placeholder="Ada Okonkwo" /></Field>
           ) : null}
-          <Field label="Email"><input name="email" type="email" required autoComplete="email" /></Field>
-          <Field label="Password">
-            <input
-              name="password"
-              type="password"
-              required
-              minLength={8}
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-              placeholder={mode === "register" ? "At least 8 characters" : undefined}
-            />
-          </Field>
+          <Field label="Email"><input name="email" type="email" required autoComplete="email" placeholder="you@business.com" /></Field>
+          <label className="field">
+            <span>Password</span>
+            <div className="password-wrap">
+              <input
+                name="password"
+                type={showPassword ? "text" : "password"}
+                required
+                minLength={8}
+                autoComplete={mode === "login" ? "current-password" : "new-password"}
+                placeholder={mode === "register" ? "At least 8 characters" : "Enter your password"}
+              />
+              <button type="button" className="password-reveal" aria-label={showPassword ? "Hide password" : "Show password"} onClick={() => setShowPassword((v) => !v)}>
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+              </button>
+            </div>
+          </label>
           <button className="filled-button" disabled={loading}>
             {loading ? <Loader2 className="spin" size={18} /> : null}
             {mode === "login" ? "Sign in" : "Create account"}
@@ -659,11 +668,43 @@ function AppBar({ title, subtitle, right }: { title: string; subtitle?: string; 
 function Brand({ large = false }: { large?: boolean }) {
   return (
     <div className={`brand ${large ? "brand-large" : ""}`}>
-      <span className="brand-mark" aria-hidden="true">
-        <span>S</span>
-        <span>34</span>
-      </span>
-      {large ? <strong>Sart34</strong> : null}
+      <svg
+        className="brand-logo"
+        viewBox="0 0 80 96"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        aria-label="Sart34"
+      >
+        <defs>
+          <linearGradient id="brandGrad" x1="8" y1="8" x2="72" y2="88" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#52D177" />
+            <stop offset="0.5" stopColor="#3DBB61" />
+            <stop offset="1" stopColor="#1A7835" />
+          </linearGradient>
+          <linearGradient id="brandShadow" x1="8" y1="44" x2="72" y2="56" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#1A7835" stopOpacity="0.35" />
+            <stop offset="1" stopColor="#1A7835" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {/* S ribbon — single stroke path */}
+        <path
+          d="M60 10 C68 10 72 16 72 23 C72 30 68 35 60 38 L20 50 C12 53 8 59 8 67 C8 76 14 86 26 86 L60 86"
+          stroke="url(#brandGrad)"
+          strokeWidth="16"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
+        {/* Shadow at mid-crossover */}
+        <path
+          d="M60 38 L20 50"
+          stroke="url(#brandShadow)"
+          strokeWidth="16"
+          strokeLinecap="butt"
+          fill="none"
+        />
+      </svg>
+      {large ? <strong className="brand-name">Sart34</strong> : null}
     </div>
   );
 }
@@ -1933,25 +1974,26 @@ function CreateAdSheet({
 function PlatformPreview({ platform, media, brief, budget, audience }: {
   platform: PlatformDef;
   media: { url: string; kind: "image" | "video" } | null;
-  brief: { productName: string; offer: string; description: string };
+  brief: { productName: string; offer: string; description: string; name?: string };
   budget: { callToAction: string };
   audience: { location: string };
 }) {
-  const headline = brief.offer || brief.productName || "Your hook here";
-  const body = brief.description || "Sart34 will write the body.";
+  const brandName = brief.productName || brief.name || "Your brand";
+  const headline = brief.offer || brief.productName || "Your headline";
+  const body = brief.description || "AI will craft the copy once you submit.";
 
   if (platform.id === "META") {
     return (
       <div className="preview meta-preview">
         <div className="preview-chrome">
-          <span className="preview-dot" /> <strong>your.brand</strong> · <span>Sponsored</span>
+          <span className="preview-dot" /> <strong>{brandName}</strong> · <span>Sponsored</span>
           <MoreHorizontal size={16} />
         </div>
         <div className="preview-media">
           {media ? (media.kind === "video" ? <video src={media.url} loop muted autoPlay playsInline /> : <img src={media.url} alt="" />) : <PreviewPlaceholder />}
         </div>
         <div className="preview-body">
-          <strong>your.brand</strong> {headline}
+          <strong>{brandName}</strong> {headline}
           <p>{body}</p>
           <button className="preview-cta">{budget.callToAction}</button>
         </div>
@@ -1970,7 +2012,7 @@ function PlatformPreview({ platform, media, brief, budget, audience }: {
         <div className="g-result">
           <span className="g-ad-tag">Sponsored</span>
           <strong>{headline.slice(0, 30)}</strong>
-          <span className="g-url">your-business.com</span>
+          <span className="g-url">{brandName.toLowerCase().replace(/\s+/g, "")}.com</span>
           <p>{body.slice(0, 90)}</p>
           <span className="g-sitelinks">More info · Pricing · Contact · Reviews</span>
         </div>
@@ -1986,7 +2028,7 @@ function PlatformPreview({ platform, media, brief, budget, audience }: {
           {media ? (media.kind === "video" ? <video src={media.url} loop muted autoPlay playsInline /> : <img src={media.url} alt="" />) : <PreviewPlaceholder />}
           <div className="tt-overlay">
             <div className="tt-text">
-              <strong>@your.brand · Sponsored</strong>
+              <strong>@{brandName.toLowerCase().replace(/\s+/g, "")} · Sponsored</strong>
               <p>{headline}</p>
               <span className="tt-music">♪ original sound</span>
             </div>
@@ -2002,7 +2044,7 @@ function PlatformPreview({ platform, media, brief, budget, audience }: {
     return (
       <div className="preview whatsapp-preview">
         <div className="wa-bubble">
-          <strong>Your Brand · WhatsApp Business</strong>
+          <strong>{brandName} · WhatsApp Business</strong>
           <p>{headline}</p>
           <p className="wa-meta">{body.slice(0, 140)}</p>
           <div className="wa-quick"><span>{budget.callToAction}</span><span>See catalog</span></div>
@@ -2017,13 +2059,13 @@ function PlatformPreview({ platform, media, brief, budget, audience }: {
       <div className="preview linkedin-preview">
         <div className="li-head">
           <div className="li-avatar">in</div>
-          <div><strong>Your Company</strong><span>Promoted · {audience.location || "Global"}</span></div>
+          <div><strong>{brandName}</strong><span>Promoted · {audience.location || "Global"}</span></div>
         </div>
         <p className="li-body">{body}</p>
         <div className="li-media">{media ? (media.kind === "video" ? <video src={media.url} controls /> : <img src={media.url} alt="" />) : <PreviewPlaceholder />}</div>
         <div className="li-card">
           <strong>{headline}</strong>
-          <span>your-business.com</span>
+          <span>{brandName.toLowerCase().replace(/\s+/g, "")}.com</span>
           <button className="preview-cta li-cta">{budget.callToAction}</button>
         </div>
         <span className="preview-foot">Sponsored Content · Lead Gen Form</span>
@@ -2036,7 +2078,7 @@ function PlatformPreview({ platform, media, brief, budget, audience }: {
       <div className="preview x-preview">
         <div className="x-head">
           <div className="x-avatar">𝕏</div>
-          <div><strong>Your Brand</strong> <span>@yourbrand · Promoted</span></div>
+          <div><strong>{brandName}</strong> <span>@{brandName.toLowerCase().replace(/\s+/g, "")} · Promoted</span></div>
         </div>
         <p>{body.slice(0, 240)}</p>
         <div className="x-media">{media ? (media.kind === "video" ? <video src={media.url} controls /> : <img src={media.url} alt="" />) : <PreviewPlaceholder />}</div>

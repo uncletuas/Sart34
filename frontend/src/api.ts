@@ -92,7 +92,12 @@ export class ApiClient {
     if (!(options.body instanceof FormData)) headers.set("Content-Type", "application/json");
     if (this.accessToken) headers.set("Authorization", `Bearer ${this.accessToken}`);
 
-    const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    let response: Response;
+    try {
+      response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+    } catch {
+      throw new Error("Cannot reach the server. Check your internet connection and try again.");
+    }
     if (!response.ok) {
       const body = await response.json().catch(() => ({ message: response.statusText }));
       throw new Error(Array.isArray(body.message) ? body.message.join(", ") : body.message ?? "Request failed");
