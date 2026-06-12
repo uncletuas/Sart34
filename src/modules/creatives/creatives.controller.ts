@@ -3,8 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { ApiBearerAuth, ApiConsumes, ApiTags } from "@nestjs/swagger";
 import { Response } from "express";
-import { diskStorage } from "multer";
-import * as path from "node:path";
+import { memoryStorage } from "multer";
 import { CurrentUser } from "../../shared/decorators/current-user.decorator";
 import { Public } from "../../shared/decorators/public.decorator";
 import type { AuthUser } from "../../shared/types/auth-user";
@@ -25,17 +24,7 @@ export class CreativesController {
 
   @Post("upload")
   @ApiConsumes("multipart/form-data")
-  @UseInterceptors(
-    FileInterceptor("file", {
-      storage: diskStorage({
-        destination: "uploads",
-        filename: (_req, file, callback) => {
-          const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}${path.extname(file.originalname)}`;
-          callback(null, unique);
-        }
-      })
-    })
-  )
+  @UseInterceptors(FileInterceptor("file", { storage: memoryStorage() }))
   async upload(
     @CurrentUser() user: AuthUser,
     @UploadedFile() file: Express.Multer.File,
@@ -44,11 +33,15 @@ export class CreativesController {
   ) {
     this.storage.validate(file);
     await this.workspaces.assertMembership(user.sub, user.role, workspaceId, ["OWNER", "ADMIN", "MARKETING_MANAGER"]);
+
+    const { key, url } = await this.storage.upload(file);
+    const fileUrl = url || this.buildLocalFileUrl(key);
+
     return this.prisma.adCreative.create({
       data: {
         workspaceId,
         campaignId,
-        fileUrl: this.buildFileUrl(file.filename),
+        fileUrl,
         fileName: file.originalname,
         fileType: file.mimetype,
         fileSize: file.size,
@@ -57,10 +50,10 @@ export class CreativesController {
     });
   }
 
-  private buildFileUrl(fileName: string) {
+  private buildLocalFileUrl(key: string) {
     const base = this.config.get<string>("PUBLIC_BASE_URL", "").replace(/\/$/, "");
     const prefix = this.config.get<string>("API_PREFIX", "api/v1").replace(/^\/|\/$/g, "");
-    return `${base}/${prefix}/creatives/files/${fileName}`;
+    return `${base}/${prefix}/creatives/files/${key}`;
   }
 
   @Get()
@@ -80,6 +73,9 @@ export class CreativesController {
   async remove(@CurrentUser() user: AuthUser, @Param("id") id: string) {
     const creative = await this.prisma.adCreative.findUniqueOrThrow({ where: { id } });
     await this.workspaces.assertMembership(user.sub, user.role, creative.workspaceId, ["OWNER", "ADMIN", "MARKETING_MANAGER"]);
+    // Extract key from URL for S3 or local filename
+    const key = creative.fileUrl.split("/").pop() ?? "";
+    await this.storage.deleteFile(key);
     await this.prisma.adCreative.delete({ where: { id } });
     return { success: true };
   }

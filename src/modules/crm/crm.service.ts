@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { LeadStatus, MessageChannel } from "@prisma/client";
 import type { AuthUser } from "../../shared/types/auth-user";
 import { AiService } from "../ai/ai.service";
+import { TiktokEventsService } from "../integrations/tiktok-events.service";
 import { PrismaService } from "../prisma/prisma.service";
 import { WorkspacesService } from "../workspaces/workspaces.service";
 import { CreateLeadDto, ScheduleFollowUpDto, UpdateLeadDto } from "./dto/crm.dto";
@@ -11,12 +12,13 @@ export class CrmService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly workspaces: WorkspacesService,
-    private readonly ai: AiService
+    private readonly ai: AiService,
+    private readonly tiktokEvents: TiktokEventsService
   ) {}
 
   async create(user: AuthUser, dto: CreateLeadDto) {
     await this.workspaces.assertMembership(user.sub, user.role, dto.workspaceId, ["OWNER", "ADMIN", "MARKETING_MANAGER", "SALES_STAFF"]);
-    return this.prisma.lead.create({
+    const lead = await this.prisma.lead.create({
       data: {
         workspaceId: dto.workspaceId,
         campaignId: dto.campaignId,
@@ -30,6 +32,19 @@ export class CrmService {
         location: dto.location
       }
     });
+
+    // Fire TikTok server-side lead event (non-blocking, errors are swallowed in the service)
+    if (dto.sourcePlatform === "TIKTOK" || !dto.sourcePlatform) {
+      this.tiktokEvents.trackLead({
+        email: dto.email,
+        phone: dto.phone ?? dto.whatsappNumber,
+        fullName: dto.fullName,
+        eventId: lead.id,
+        currency: "NGN"
+      });
+    }
+
+    return lead;
   }
 
   async list(user: AuthUser, workspaceId: string, status?: string) {
